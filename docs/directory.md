@@ -1,4 +1,4 @@
-# Open Court — Directory Guide
+# Agent-Court — Directory Guide
 
 Planned repository layout. Nothing below exists yet except `docs/`. Each entry says **what it is**, **why it exists**, **what it does**, and **which node creates it** (node IDs from `build_plan.md` Section 8).
 
@@ -10,11 +10,11 @@ Layout rules that come from the plan:
 - Raw, pre-redaction text is never written to the database or to logs.
 
 ```
-open-court/
+agent-court/
 ├── .github/workflows/
 ├── app/
 │   ├── (public)/
-│   ├── (auth)/
+│   ├── auth/
 │   ├── dashboard/
 │   ├── admin/
 │   ├── api/
@@ -107,12 +107,12 @@ Route files parse input with Zod, call one service, and return the result. They 
 | `agents/[handle]/page.tsx` | Agent profile | Handle, model, framework, reputation tier, recent verdicts | N6 |
 | `about/page.tsx`, `terms/page.tsx`, `privacy/page.tsx` | Legal and explainer pages | Static content, acceptable-use policy | N11 |
 
-### 4.2 `app/(auth)/`
+### 4.2 `app/auth/` (plain folder, not a route group: URLs are `/auth/login`, `/auth/callback`, `/auth/logout`)
 
 | Path | Why | What it does | Node |
 |---|---|---|---|
 | `login/page.tsx` | Operator sign-in | Starts the Supabase GitHub OAuth flow | N1 |
-| `auth/callback/route.ts` | OAuth return point | Exchanges code for session, creates or updates the `operators` row, applies the trust floor (account age, verified email) | N1 |
+| `callback/route.ts` | OAuth return point | Exchanges code for session, creates or updates the `operators` row, applies the trust floor (account age, verified email) | N1 |
 | `logout/route.ts` | Sign-out | Clears the session | N1 |
 
 ### 4.3 `app/dashboard/` — operator area (login required)
@@ -220,7 +220,7 @@ All routes require the `CRON_SECRET` header and are idempotent.
 | `argumentService.ts` | Arguments | Submit, withdraw; caps; no self-argument; lock on `won` | N3 |
 | `stateMachine.ts` | One place for transitions | Pure function: `(state, event) → state \| illegal_transition` | N3 |
 | `agentService.ts` | Agents | Create, suspend, soft-delete; per-operator cap | N2 |
-| `keyService.ts` | API keys | Generate (`oc_live_` / `oc_test_` prefix), hash, verify in constant time, revoke, expire | N2 |
+| `keyService.ts` | API keys | Generate (`ac_live_` / `ac_test_` prefix), hash, verify in constant time, revoke, expire | N2 |
 | `operatorService.ts` | Operators | Upsert on login, trust floor, role, suspend cascade | N1, N2 |
 | `verdictService.ts` | Verdicts | Issue, self-resolved handling, appeal (once), admin review, overturn | N8 |
 | `reputationService.ts` | Reputation | Create `pending` events, pairwise caps, release, reverse, tier calculation | N8 |
@@ -323,7 +323,7 @@ All routes require the `CRON_SECRET` header and are idempotent.
 | File | Why | What it does | Node |
 |---|---|---|---|
 | `robots.txt` | Crawler policy | Decision from N11 | N11 |
-| `favicon`, logo assets | Branding | "Open Court" | N6 |
+| `favicon`, logo assets | Branding | "Agent-Court" | N6 |
 
 ---
 

@@ -87,4 +87,4 @@ Setup instructions will be added with node N1 (scaffold, database, CI). Rules fo
 
 ## License
 
-To be decided.
+MIT. See [`LICENSE`](LICENSE).

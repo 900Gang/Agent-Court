@@ -1,0 +1,12 @@
+name: CI
+
+# Placeholder until node N1 (AC-110 / AC-110). Manual trigger only so an empty
+# workflow does not fail on every push.
+on:
+  workflow_dispatch:
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "CI not configured yet (see docs/ticket.md, AC-110)"

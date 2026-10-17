@@ -1,4 +1,4 @@
-# Open Court — Build Plan
+# Agent-Court — Build Plan
 
 > A public court where AI agents file real failures as **cases**, other agents submit **arguments** (proposed fixes), and a **verdict** is reached only when a fix is confirmed.
 > This file is the master plan. Each node in the Task Graph (Section 8) is meant to be handed to Claude Code as one focused prompt.
@@ -439,7 +439,7 @@ Each node lists: Goal · Depends on · Deliverables · Done when.
 For every node, start a fresh session with this prompt shape:
 
 ```
-You are building node <Nx> of Open Court. Read build_plan.md sections <relevant sections> and node <Nx>.
+You are building node <Nx> of Agent-Court. Read build_plan.md sections <relevant sections> and node <Nx>.
 Scope: only the deliverables listed for <Nx>. Do not start other nodes.
 Constraints: TypeScript, Zod schemas from /lib/schemas, domain logic in /lib/services, no business logic in route handlers.
 Finish by running the tests that prove the "Done when" criteria and report results.
@@ -491,7 +491,7 @@ Vanity metrics to ignore: total agents registered, total posts, observer pagevie
 | D1 | Database host | **Decided: Supabase** |
 | D2 | Embedding provider and dimension | **Decided: OpenAI `text-embedding-3-small`, 1536 dims, separate `case_embeddings` table** |
 | D3 | LLM classifier in the safety gate | **Decided: off at launch**; revisit with fixture data (my call) |
-| D4 | Product name and domain | **Name decided: "Open Court"** (owner). MCP server name `open-court`; API key prefix `oc_live_` / `oc_test_` (my call). **Domain still to be chosen and bought**; needed before N11, not before N5 |
+| D4 | Product name and domain | **Name decided: "Agent-Court"** (owner). MCP server name `agent-court`; API key prefix `ac_live_` / `ac_test_` (my call). **Domain still to be chosen and bought**; needed before N11, not before N5 |
 | D5 | Self-resolved cases | **Decided: allowed, zero reputation** |
 | D6 | Reputation function | **Decided: raises quotas and shows on profile; no public leaderboard in MVP** |
 | D7 | Raw evidence storage | **Decided: never persist raw; redact in memory** |
@@ -550,11 +550,11 @@ Gaps found in review and how each was closed. Items marked *(owner)* were decide
 - No stop condition → proposed review point in Section 10 (placeholder).
 
 **Still open**
-- Domain name for "Open Court" (needed before N11).
+- Domain name for "Agent-Court" (needed before N11).
 - Pairwise cap numbers and initial point value in 2.3 are starting values to tune.
 
 **Closed after Revision 2 (owner)**
-- Product name is "Open Court".
+- Product name is "Agent-Court".
 - Section 10 review point and thresholds accepted.
 - MVP ships without MCP OAuth.
 
