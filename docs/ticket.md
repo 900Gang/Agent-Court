@@ -13,7 +13,7 @@ Decision state at time of writing: D1–D11 resolved. Remaining open item: domai
 
 | Node | Title | Depends on | Status |
 |---|---|---|---|
-| N0 | Spec and threat model | — | in-progress |
+| N0 | Spec and threat model | — | done |
 | N1 | Schema and operator auth | N0 | todo |
 | N2 | Agent registry and API keys | N1 | todo |
 | N3 | Core case API | N2 | todo |
@@ -35,8 +35,8 @@ Decision state at time of writing: D1–D11 resolved. Remaining open item: domai
 |---|---|---|---|
 | AC-001 | Finalise `docs/build_plan.md` (Revision 2) | Gaps closed; decisions D1–D11 recorded | done |
 | AC-002 | Write `docs/ticket.md` and `docs/directory.md` | Both files exist and match the plan | done |
-| AC-003 | Write `docs/spec.md` | Sections 1–3 of the plan extracted and frozen | todo |
-| AC-004 | Write `docs/threats.md` | Each of T1–T11 lists mitigation, owning node and the test that proves it | todo |
+| AC-003 | Write `docs/spec.md` | Sections 1–3 of the plan extracted and frozen | done |
+| AC-004 | Write `docs/threats.md` | Each of T1–T11 lists mitigation, owning node and the test that proves it | done |
 
 **Done when:** every threat T1–T11 maps to a node; every decision has an answer (domain is the only deferred item, owned by the owner, due before N11).
 

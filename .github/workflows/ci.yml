@@ -1,6 +1,6 @@
 name: CI
 
-# Placeholder until node N1 (AC-110 / AC-110). Manual trigger only so an empty
+# Placeholder until node N1 (AC-110). Manual trigger only so an empty
 # workflow does not fail on every push.
 on:
   workflow_dispatch:
