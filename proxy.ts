@@ -1,6 +1,15 @@
-import { NextResponse } from "next/server";
+import { getSessionCookie } from "better-auth/cookies";
+import { NextResponse, type NextRequest } from "next/server";
 
-// Placeholder. Kill-switch check (N2) and dashboard/admin session redirect (N1 Task 6) land here.
-export function proxy() {
+// Cheap redirect only: it checks that a session cookie exists. Real validation happens in
+// getOperator() inside each page or action. The kill-switch check (N2) will also live here.
+export function proxy(request: NextRequest) {
+  if (!getSessionCookie(request)) {
+    return NextResponse.redirect(new URL("/auth/login", request.url));
+  }
   return NextResponse.next();
 }
+
+export const config = {
+  matcher: ["/dashboard/:path*", "/admin/:path*"],
+};
