@@ -187,9 +187,10 @@ Acceptance: `.env.local` exists, is gitignored, and holds the seven names in `.e
 - Test: `tests/unit/dbClient.test.ts`
 
 **Interfaces:**
-- `buildClientOptions(url: string): { prepare: false; max: number; ssl: 'require' | false }` (pure); `createDb(url: string): Db`; `getDb(): Db` (singleton from `getServerEnv().databaseUrl`). File starts with `import 'server-only'`. Type `Db` is exported here.
+- `normalizeDatabaseUrl(url: string): string` removes the `channel_binding` query parameter (Neon's copy-paste strings include `channel_binding=require`, which the `postgres` driver would send to the server as an unknown setting) and keeps `sslmode`.
+- `buildClientOptions(url: string): { prepare: false; max: number; ssl: 'require' | false }` (pure); `createDb(url: string): Db` (normalizes first); `getDb(): Db` (singleton from `getServerEnv().databaseUrl`). File starts with `import 'server-only'`. Type `Db` is exported here.
 
-- [ ] **Step 1: Write failing tests:** `prepare === false` (PgBouncer transaction mode); `max <= 5`; localhost URL gives `ssl: false`, any other host gives `'require'`.
+- [ ] **Step 1: Write failing tests:** `normalizeDatabaseUrl` strips `channel_binding` and keeps `sslmode=require`; `prepare === false` (PgBouncer transaction mode); `max <= 5`; localhost URL gives `ssl: false`, any other host gives `'require'`.
 - [ ] **Step 2:** Run the test. Expected: FAIL.
 - [ ] **Step 3:** Implement. `drizzle.config.ts` already points at the unpooled URL (Task 3).
 - [ ] **Step 4:** Run tests and `pnpm lint`. Expected: PASS.
