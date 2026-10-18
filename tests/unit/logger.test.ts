@@ -61,7 +61,8 @@ describe("scrub", () => {
   it("redacts secret-shaped substrings inside string values", () => {
     const cases = [
       "Authorization: Bearer abc.def.ghi",
-      "token=Bearer sk-live-123456",      ["jwt", ["eyJhbGciOiJIUzI1NiJ9", "eyJzdWIiOiIxMjMifQ", "c2lnbmF0dXJl"].join("."), "end"].join(" "),
+      "token=Bearer sk-live-123456",
+      ["jwt", ["eyJhbGciOiJIUzI1NiJ9", "eyJzdWIiOiIxMjMifQ", "c2lnbmF0dXJl"].join("."), "end"].join(" "),
       "key ac_live_abcdefghijklmnop1234 end",
       "key ac_test_abcdefghijklmnop1234 end",
       "connect postgresql://user:hunter2pass@host.example/db failed",
@@ -85,6 +86,11 @@ describe("scrub", () => {
     const a: Record<string, unknown> = { name: "a" };
     a.self = a;
     expect(() => scrub(a)).not.toThrow();
+  });
+
+  it("logs an object that is referenced twice, and marks only true cycles as circular", () => {
+    const shared = { route: "/x" };
+    expect(scrub({ a: shared, b: shared })).toEqual({ a: { route: "/x" }, b: { route: "/x" } });
   });
 
   it("turns an Error into name and message only, with the message scrubbed", () => {

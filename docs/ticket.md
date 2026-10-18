@@ -50,7 +50,7 @@ Depends on: N0.
 |---|---|---|---|
 | AC-101 | Scaffold Next.js (App Router) + TypeScript + pnpm | `pnpm dev` serves a page; strict TS; eslint passes | done |
 | AC-102 | Create Neon projects: dev (with staging branch), prod | Dev project and staging branch exist; prod project on a paid plan before N10; credentials stored in secrets, not in git | todo |
-| AC-103 | Config and logging foundation (`lib/config/env.ts`, `lib/config/logger.ts`) | Env validated by Zod; logger never emits bodies, headers or keys (unit test) | todo |
+| AC-103 | Config and logging foundation (`lib/config/env.ts`, `lib/config/logger.ts`) | Env validated by Zod; logger never emits bodies, headers or keys (unit test) | done |
 | AC-104 | Drizzle schema for all Section 5 tables except `case_embeddings` and `search_events` | `db:generate` produces migration matching the plan; enums and constraints present (partial unique on verdicts, `won` cannot become `withdrawn`) | todo |
 | AC-105 | First migration: pgvector, RLS on every table, force RLS, revoke `PUBLIC` grants, create least-privilege app role | No-grants-role test against every table returns nothing and cannot write; Data API exposes nothing in `public` | todo |
 | AC-106 | DB client over the Neon pooled endpoint | Transaction mode, `prepare: false`; direct URL used only for migrations | todo |

@@ -50,29 +50,35 @@ function scrubValue(value: unknown, depth: number, seen: WeakSet<object>): unkno
   }
 
   const object = value as object;
-  if (seen.has(object)) return "[Circular]";
-  if (depth >= MAX_DEPTH) return "[MaxDepth]";
-  seen.add(object);
-
   if (object instanceof Error) {
     return { name: object.name, message: scrubString(object.message) };
   }
   if (object instanceof Date) {
     return Number.isNaN(object.getTime()) ? "[Invalid Date]" : object.toISOString();
   }
-  if (Array.isArray(object)) {
-    return object.map((item) => scrubValue(item, depth + 1, seen));
-  }
+  if (seen.has(object)) return "[Circular]";
+  if (depth >= MAX_DEPTH) return "[MaxDepth]";
 
-  const output: Record<string, unknown> = {};
-  for (const [key, inner] of Object.entries(object)) {
-    if (isSensitiveKey(key) && inner !== null && typeof inner !== "number" && typeof inner !== "boolean") {
-      output[key] = REDACTED;
-    } else {
-      output[key] = scrubValue(inner, depth + 1, seen);
+  // `seen` tracks only the current ancestor chain, so an object referenced twice
+  // in different places is logged twice and only a true cycle prints "[Circular]".
+  seen.add(object);
+  try {
+    if (Array.isArray(object)) {
+      return object.map((item) => scrubValue(item, depth + 1, seen));
     }
+
+    const output: Record<string, unknown> = {};
+    for (const [key, inner] of Object.entries(object)) {
+      if (isSensitiveKey(key) && inner !== null && typeof inner !== "number" && typeof inner !== "boolean") {
+        output[key] = REDACTED;
+      } else {
+        output[key] = scrubValue(inner, depth + 1, seen);
+      }
+    }
+    return output;
+  } finally {
+    seen.delete(object);
   }
-  return output;
 }
 
 /** Returns a copy of value that is safe to log: sensitive keys, tokens, JWTs, our API keys and URL passwords removed. */
