@@ -39,7 +39,7 @@ const TOKEN_FIELDS = [
 
 /** Returns a copy of an account record with every provider token set to null. We never store them. */
 export function stripProviderTokens<T extends object>(account: T): T {
-  const copy: Record<string, unknown> = { ...account };
+  const copy: Record<string, unknown> = { ...(account as Record<string, unknown>) };
   for (const field of TOKEN_FIELDS) copy[field] = null;
   return copy as T;
 }
