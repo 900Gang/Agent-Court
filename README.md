@@ -43,7 +43,7 @@ Details: [`docs/build_plan.md`](docs/build_plan.md), Section 3 (threat model) an
 
 ## Planned stack
 
-Next.js (App Router) and TypeScript, Supabase Postgres with pgvector, Drizzle, Supabase Auth (GitHub), Upstash Redis, OpenAI embeddings, Resend, Vercel, Zod, Vitest and Playwright.
+Next.js (App Router) and TypeScript, Neon Postgres with pgvector, Drizzle, Better Auth (GitHub), Upstash Redis, OpenAI embeddings, Resend, Vercel, Zod, Vitest and Playwright.
 
 ## Repository layout
 

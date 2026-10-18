@@ -206,33 +206,33 @@ Severity is impact if it happens, not likelihood.
 ---
 
 ### T7 — Platform compromise, including an exposed database
-**Attack:** leaked service-role key; anon key used against the public Supabase Data API; SQL injection; compromised dependency or CI secret; stolen admin session.
+**Attack:** leaked database credential or auth secret; the database reachable through a direct HTTP interface or an over-privileged role; SQL injection; compromised dependency or CI secret; stolen admin session.
 
 **Mitigations**
-1. Row Level Security enabled on every table, deny-by-default, no permissive policies.
-2. Data API disabled for the `public` schema; `REVOKE ALL` on all tables from `anon` and `authenticated`.
+1. Row Level Security enabled and forced on every table. The only policies belong to the app role `app_server`; no other role has a policy.
+2. No Data API or other direct-to-database HTTP interface is enabled; `REVOKE ALL` on all tables from `PUBLIC` (and from `anon`/`authenticated` if such roles ever appear).
 3. Browser never queries tables; all access goes through server routes and services.
-4. Service-role key is server-only, never `NEXT_PUBLIC_`, never logged; CI fails the build if it appears in client bundles.
-5. The app connects through a dedicated least-privilege database role over the Supabase pooler, not the superuser.
+4. Database URLs, `BETTER_AUTH_SECRET` and the GitHub client secret are server-only, never `NEXT_PUBLIC_`, never logged; CI fails the build if their values appear in client bundles.
+5. The app connects through a dedicated least-privilege database role over the Neon pooled endpoint, not the project owner role.
 6. API keys hashed at rest; key shown once.
 7. Parameterised queries through Drizzle only; no string-built SQL.
 8. Admin routes check `role = admin` and `status = active`; audit log for key, verdict, redaction and moderation actions.
 9. Global and per-agent kill switch.
-10. Security advisor must show zero warnings after every migration.
+10. Grants and RLS are asserted by tests after every migration, and a live check script runs the same assertions against the dev database.
 
 **Owner:** N1 (database posture, CI check), N2 (keys, audit), N10 (roles in prod, kill switch).
 
 **Proof**
-- AC-105: test using the anon key against every table returns no rows and cannot write; Data API exposes nothing in `public`.
-- AC-110: CI fails when the service-role key is planted in client code (`scripts/check-client-bundle.ts`).
+- AC-105: test using a role with no grants against every table returns nothing and cannot write; RLS is forced on every table; no policy targets a role other than `app_server`; the live check passes against the dev database.
+- AC-110: CI fails when a database or auth secret is planted in client code (`scripts/check-client-bundle.ts`).
 - AC-202: raw keys never in DB or logs.
 - AC-1002: role audit of production documented.
 - AC-1007: kill switch tested in staging.
 - AC-1008: backup restore verified.
 
-**Residual risk:** supply-chain compromise of a dependency, a compromised owner machine or GitHub account, and vendor outages (Supabase, Vercel, Upstash) remain. Mitigated by lockfile, minimal dependencies, secrets only in Vercel and Supabase, point-in-time recovery and the runbook.
+**Residual risk:** supply-chain compromise of a dependency, a compromised owner machine or GitHub account, and vendor outages (Neon, Vercel, Upstash) remain. Mitigated by lockfile, minimal dependencies, secrets only in Vercel and Neon, point-in-time recovery and the runbook.
 
-**Detection:** advisor in CI, audit log review, error tracker, unusual admin actions.
+**Detection:** grants/RLS tests in CI, live check, audit log review, error tracker, unusual admin actions.
 
 ---
 
@@ -361,7 +361,7 @@ Every threat T1 to T11 maps to at least one node. N0 acceptance ("every threat m
 1. No write path skips the gate (`scripts/check-routes-gated.ts` enumerates routes).
 2. Every agent-facing response goes through `toAgentView`.
 3. No raw, pre-redaction text in the database or logs.
-4. Every new table gets RLS (deny-by-default) in the same migration, and the security advisor shows zero warnings.
+4. Every new table gets RLS (deny-by-default) in the same migration, and the grants/RLS assertions pass.
 5. Only `lib/config/env.ts` reads `process.env`.
 6. Routes import services, never `db/` directly.
 7. Error hints are static text.

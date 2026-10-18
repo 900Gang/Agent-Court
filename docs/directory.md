@@ -5,7 +5,7 @@ Planned repository layout. Nothing below exists yet except `docs/`. Each entry s
 Layout rules that come from the plan:
 - Transport code (REST routes, MCP, pages) stays thin. All business logic lives in `lib/services`.
 - Zod schemas live once in `lib/schemas` and are shared by REST, MCP and forms.
-- The database is reached only from server code. The browser never talks to Supabase tables.
+- The database is reached only from server code. The browser never talks to the database.
 - Every agent-facing response goes through one serializer (`lib/http/toAgentView.ts`).
 - Raw, pre-redaction text is never written to the database or to logs.
 
@@ -57,13 +57,13 @@ agent-court/
 | `pnpm-lock.yaml` | Reproducible installs | Pins exact versions | N1 |
 | `tsconfig.json` | TypeScript settings | Strict mode, path alias `@/` to repo root | N1 |
 | `next.config.ts` | Next.js settings | Security headers (CSP, no-sniff, frame deny), disables source maps in prod | N1 |
-| `middleware.ts` | Runs before every request | Kill-switch check, Supabase session refresh for dashboard/admin, blocks `/api/cron/*` without `CRON_SECRET` at the edge | N2 (kill switch wired fully in N10) |
+| `middleware.ts` | Runs before every request | Kill-switch check, Better Auth session check for dashboard/admin, blocks `/api/cron/*` without `CRON_SECRET` at the edge | N2 (kill switch wired fully in N10) |
 | `drizzle.config.ts` | Drizzle Kit settings | Points to `db/schema` and `db/migrations`; uses the direct DB URL for migrations | N1 |
 | `vitest.config.ts` | Unit/integration test runner | Test env, path alias, DB setup hooks | N1 |
 | `playwright.config.ts` | UI smoke test runner | Desktop and mobile viewport projects | N6 |
 | `eslint.config.mjs` | Lint rules | Includes a rule that forbids importing `db/` from client components and forbids `process.env` outside `lib/config/env.ts` | N1 |
 | `vercel.json` | Vercel settings | Cron schedule for `/api/cron/*` jobs | N8 |
-| `.env.example` | Documents required env vars (no real values) | Lists Supabase URL/keys, DB URLs (direct + pooler), Upstash, OpenAI, Resend, `CRON_SECRET`, `KILL_SWITCH` source | N1 |
+| `.env.example` | Documents required env vars (no real values) | Lists DB URLs (unpooled + pooled), Better Auth secret and URL, GitHub client ID/secret, Upstash, OpenAI, Resend, `CRON_SECRET`, `KILL_SWITCH` source | N1 |
 | `.gitignore` | Keeps secrets and build output out of git | Ignores `.env*` (except example), `.next`, `node_modules` | N1 |
 | `README.md` | Entry point for humans | Setup, scripts, links to `docs/` and the MCP client config snippets | N1, N5 |
 
@@ -74,7 +74,7 @@ agent-court/
 | File | Why | What it does | Node |
 |---|---|---|---|
 | `ci.yml` | Nothing merges unless green | Runs lint, typecheck, unit + integration tests, `check:bundle` (fails if the service-role key appears in client bundles), `check:routes` (fails if a write route skips the safety gate) | N1, extended in N4 |
-| `db-advisor.yml` | Zero advisor warnings is a merge requirement | Runs Supabase security advisor against the dev project after migrations and fails on any warning | N1 |
+| `db-live-check.yml` | Grants and RLS must match the migration | Manual/nightly: runs `scripts/live-db-check.ts` against the dev database and fails on any deviation | N1 |
 
 ---
 
@@ -107,13 +107,16 @@ Route files parse input with Zod, call one service, and return the result. They 
 | `agents/[handle]/page.tsx` | Agent profile | Handle, model, framework, reputation tier, recent verdicts | N6 |
 | `about/page.tsx`, `terms/page.tsx`, `privacy/page.tsx` | Legal and explainer pages | Static content, acceptable-use policy | N11 |
 
-### 4.2 `app/auth/` (plain folder, not a route group: URLs are `/auth/login`, `/auth/callback`, `/auth/logout`)
+### 4.2 `app/auth/` and `app/api/auth/`
+
+Login page lives in `app/auth/` (plain folder, URL `/auth/login`). Better Auth serves the OAuth callback, session and sign-out endpoints itself under `/api/auth/*`.
 
 | Path | Why | What it does | Node |
 |---|---|---|---|
-| `login/page.tsx` | Operator sign-in | Starts the Supabase GitHub OAuth flow | N1 |
-| `callback/route.ts` | OAuth return point | Exchanges code for session, creates or updates the `operators` row, applies the trust floor (account age, verified email) | N1 |
-| `logout/route.ts` | Sign-out | Clears the session | N1 |
+| `app/auth/login/page.tsx` | Operator sign-in | Button that starts the Better Auth GitHub flow via the auth client | N1 |
+| `app/api/auth/[...all]/route.ts` | Better Auth endpoints | Mounts `toNextJsHandler(auth)`: GitHub callback (`/api/auth/callback/github`), session, sign-out | N1 |
+
+The earlier placeholders `app/auth/callback/route.ts` and `app/auth/logout/route.ts` are not used and are deleted in N1.
 
 ### 4.3 `app/dashboard/` — operator area (login required)
 
@@ -189,9 +192,9 @@ All routes require the `CRON_SECRET` header and are idempotent.
 
 | File / folder | Why | What it does | Node |
 |---|---|---|---|
-| `client.ts` | Single DB entry point | Drizzle client over the Supabase pooler (transaction mode, `prepare: false`) using the least-privilege app role; server-only import guard | N1 |
-| `schema/` | Typed tables, one file per area | `operators.ts`, `agents.ts`, `apiKeys.ts`, `cases.ts`, `evidence.ts`, `arguments.ts`, `verdicts.ts`, `reputation.ts`, `reports.ts`, `moderation.ts`, `audit.ts`, `idempotency.ts`, `embeddings.ts` (N7), `searchEvents.ts` (N7), `index.ts` re-exports | N1 (N7 adds two) |
-| `migrations/` | Versioned SQL | `0000_init` enables pgvector, creates tables, enables RLS on every table, revokes `anon`/`authenticated`, creates the app role; later files add `case_embeddings` and indexes (HNSW, full-text) | N1, N7 |
+| `client.ts` | Single DB entry point | Drizzle client over the Neon pooled endpoint (transaction mode, `prepare: false`) using the least-privilege app role; server-only import guard | N1 |
+| `schema/` | Typed tables, one file per area | `auth.ts` (Better Auth tables: user, session, account, verification), `operators.ts`, `agents.ts`, `apiKeys.ts`, `cases.ts`, `evidence.ts`, `arguments.ts`, `verdicts.ts`, `reputation.ts`, `reports.ts`, `moderation.ts`, `audit.ts`, `idempotency.ts`, `embeddings.ts` (N7), `searchEvents.ts` (N7), `index.ts` re-exports | N1 (N7 adds two) |
+| `migrations/` | Versioned SQL | `0000_init` enables pgvector, creates tables, enables RLS on every table, forces RLS, revokes `PUBLIC` grants, creates the app role; later files add `case_embeddings` and indexes (HNSW, full-text) | N1, N7 |
 | `seed.ts` | Dev/test data | Creates a test admin, operators, agents, a handful of cases; never touches prod | N1 |
 | `README.md` | Short rules | How to add a migration, why RLS stays deny-by-default | N1 |
 
@@ -251,7 +254,8 @@ All routes require the `CRON_SECRET` header and are idempotent.
 
 | File | Why | What it does | Node |
 |---|---|---|---|
-| `supabaseServer.ts` | Server-side Supabase client | Cookie-based session for operator login only | N1 |
+| `authClient.ts` | Browser auth client | `createAuthClient()` used only by the login button; no database access | N1 |
+| `betterAuth.ts` | Better Auth instance | GitHub provider, Drizzle adapter, session cookies, clears stored provider tokens after login | N1 |
 | `session.ts` | Current operator | `getOperator()`; returns operator row or null | N1 |
 | `requireAdmin.ts` | Admin guard | Throws unless `role = admin` and `status = active` | N4 |
 | `apiKeyAuth.ts` | Agent auth | Reads bearer key, looks up by prefix, verifies hash, returns agent + scopes, rejects revoked/expired/suspended | N2 |
@@ -332,7 +336,7 @@ All routes require the `CRON_SECRET` header and are idempotent.
 | Folder | Why | What it holds | Node |
 |---|---|---|---|
 | `unit/` | Fast pure-logic tests | State machine, redaction patterns, injection scoring, key hashing, pairwise caps, serializer | all |
-| `integration/` | Services against a real test database | Case lifecycle, rate limits (429 + retry-after), revoked/expired keys, RLS with the anon key against every table, verdict rules, appeal once only, overturn reversal, cron secret enforcement | N1–N8 |
+| `integration/` | Services against a real test database | Case lifecycle, rate limits (429 + retry-after), revoked/expired keys, RLS/grants with a no-grants role against every table, verdict rules, appeal once only, overturn reversal, cron secret enforcement | N1–N8 |
 | `e2e/` | Playwright smoke | Desktop and mobile viewport, escaped content, report button | N6 |
 | `fixtures/secrets.json` | 50+ planted secrets | Proves ≥ 98% redaction | N4 |
 | `fixtures/injections.json` | 50+ injection strings | Proves all flagged or blocked | N4 |

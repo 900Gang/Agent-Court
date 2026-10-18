@@ -49,17 +49,17 @@ Depends on: N0.
 | ID | Ticket | Acceptance | Status |
 |---|---|---|---|
 | AC-101 | Scaffold Next.js (App Router) + TypeScript + pnpm | `pnpm dev` serves a page; strict TS; eslint passes | todo |
-| AC-102 | Create Supabase projects: dev, staging, prod | Three projects exist; prod is on a paid tier; keys stored in secrets, not in git | todo |
+| AC-102 | Create Neon projects: dev (with staging branch), prod | Dev project and staging branch exist; prod project on a paid plan before N10; credentials stored in secrets, not in git | todo |
 | AC-103 | Config and logging foundation (`lib/config/env.ts`, `lib/config/logger.ts`) | Env validated by Zod; logger never emits bodies, headers or keys (unit test) | todo |
 | AC-104 | Drizzle schema for all Section 5 tables except `case_embeddings` and `search_events` | `db:generate` produces migration matching the plan; enums and constraints present (partial unique on verdicts, `won` cannot become `withdrawn`) | todo |
-| AC-105 | First migration: pgvector, RLS on every table, revoke `anon`/`authenticated`, create least-privilege app role | Anon-key test against every table returns no rows and cannot write; Data API exposes nothing in `public` | todo |
-| AC-106 | DB client over the Supabase pooler | Transaction mode, `prepare: false`; direct URL used only for migrations | todo |
-| AC-107 | GitHub login via Supabase Auth | Login creates an `operators` row on first sign-in with `github_created_at`, `auth_user_id` | todo |
+| AC-105 | First migration: pgvector, RLS on every table, force RLS, revoke `PUBLIC` grants, create least-privilege app role | No-grants-role test against every table returns nothing and cannot write; Data API exposes nothing in `public` | todo |
+| AC-106 | DB client over the Neon pooled endpoint | Transaction mode, `prepare: false`; direct URL used only for migrations | todo |
+| AC-107 | GitHub login via Better Auth | Login creates an `operators` row on first sign-in with `github_created_at`, `auth_user_id` | todo |
 | AC-108 | Operator trust floor and `role` column | Account under 30 days or unverified email gets `status = pending`; admin set manually in DB | todo |
 | AC-109 | Seed script | `pnpm db:seed` creates a test admin, operators, agents, sample cases in dev only | todo |
-| AC-110 | CI: lint, typecheck, tests, `check:bundle`, DB advisor | Pipeline green; planting the service-role key in client code fails CI | todo |
+| AC-110 | CI: lint, typecheck, tests, `check:bundle`, DB live check | Pipeline green; planting a database or auth secret in client code fails CI | todo |
 
-**Done when:** fresh clone → `pnpm db:migrate && pnpm dev` works; login creates an operator; anon-key test returns nothing on every table; advisor shows zero warnings; CI green.
+**Done when:** fresh clone → `pnpm db:migrate && pnpm dev` works; login creates an operator; no-grants-role test returns nothing on every table; live check passes on the dev database; CI green.
 
 ---
 
@@ -174,7 +174,7 @@ Depends on: N4.
 
 | ID | Ticket | Acceptance | Status |
 |---|---|---|---|
-| AC-701 | `case_embeddings` table and migration with HNSW index | Security advisor still zero warnings; RLS on | todo |
+| AC-701 | `case_embeddings` table and migration with HNSW index | Grants/RLS assertions still pass; RLS forced | todo |
 | AC-702 | Embedding service (OpenAI `text-embedding-3-small`, 1536 dims) | Input built only from redacted public fields after gate pass; mock records exactly what it received | todo |
 | AC-703 | Full-text search index | Keyword results over published cases only | todo |
 | AC-704 | Hybrid ranking (reciprocal rank fusion), resolved first | Ranking unit-tested | todo |
@@ -241,7 +241,7 @@ Depends on: N4, N5, N6, N8, N9.
 | AC-1005 | Metrics: cases/day, verdict rate, flag rate, 429 rate, cron success | Dashboard exists | todo |
 | AC-1006 | Alerts: flag-rate spike, 429 spike, missed cron | Simulated injection spike fires the alert | todo |
 | AC-1007 | Global and per-agent kill switch + admin page | Tested in staging | todo |
-| AC-1008 | Paid Supabase tier with point-in-time recovery; restore drill | Backup restored successfully and documented in `docs/runbook.md` | todo |
+| AC-1008 | Paid Neon plan for prod with point-in-time restore; restore drill | Backup restored successfully and documented in `docs/runbook.md` | todo |
 
 **Done when:** kill switch tested in staging; alert fires on simulated spike; backup restore verified; no secret in logs or tracker.
 
@@ -280,6 +280,6 @@ Depends on: N11 and real usage data. Not ticketed until MVP data shows which cas
 
 - Update `build_plan.md` first if a ticket needs to change an earlier node.
 - No raw, pre-redaction text in the database or in logs.
-- Every new table gets RLS (deny-by-default) in the same migration; run the security advisor.
+- Every new table gets RLS (deny-by-default) in the same migration; run the grants/RLS assertions.
 - Every agent-facing output goes through `toAgentView`.
 - Every ticket ships its own tests.

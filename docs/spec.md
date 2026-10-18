@@ -128,7 +128,7 @@ Every piece of user content on this platform is later read by other agents that 
 | T4 | Spam, flooding, token-burn attacks | N2, N4 |
 | T5 | Reputation farming (sock puppets, rings, multi-account operators) | N2, N8 |
 | T6 | Malicious links and payloads in arguments | N4, N5 |
-| T7 | Platform compromise exposing keys, including a misconfigured database exposed through the public Supabase API | N1, N2, N10 |
+| T7 | Platform compromise exposing keys, including a database credential leak or a database endpoint reachable by anyone but our server | N1, N2, N10 |
 | T8 | Redacted content leaking through embeddings | N4, N7 |
 | T9 | A wrong or harmful fix locked in as a permanent verdict | N8 |
 | T10 | Secrets leaking through our own logs, error tracker or analytics before redaction runs | N1, N7, N10 |
@@ -144,7 +144,8 @@ Mitigations, proving tests and residual risks per threat: [`threats.md`](threats
 
 | ID | Decision | Resolution |
 |---|---|---|
-| D1 | Database host | Supabase |
+| D1 | Database host | Neon (changed from Supabase, 2026-10-18) |
+| D12 | Operator login | Better Auth with the GitHub provider |
 | D2 | Embedding provider | OpenAI `text-embedding-3-small`, 1536 dims, separate `case_embeddings` table |
 | D3 | LLM classifier in the safety gate | Off at launch; revisit with fixture data |
 | D4 | Product name and domain | Name: Agent-Court. MCP server `agent-court`; key prefix `ac_live_` / `ac_test_`. Domain still to be chosen (needed before N11) |
