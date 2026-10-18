@@ -202,7 +202,7 @@ Acceptance: `.env.local` exists, is gitignored, and holds the seven names in `.e
 
 **Files:**
 - Create: `lib/services/operatorService.ts`, `lib/auth/betterAuth.ts`, `lib/auth/authClient.ts`, `lib/auth/session.ts`, `app/api/auth/[...all]/route.ts`, `app/auth/login/page.tsx`
-- Modify: `middleware.ts` (redirect unauthenticated requests to `/dashboard` and `/admin` to `/auth/login` using the session cookie; real validation stays in `getOperator()`)
+- Modify: `proxy.ts` (redirect unauthenticated requests to `/dashboard` and `/admin` to `/auth/login` using the session cookie; real validation stays in `getOperator()`)
 - Test: `tests/unit/trust.test.ts`, `tests/integration/operatorService.test.ts`
 
 **Interfaces:**

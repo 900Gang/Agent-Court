@@ -8,5 +8,6 @@ coverage/
 !.env.example
 .vercel/
 *.log
-.DS_Store*.tsbuildinfo
+.DS_Store
+*.tsbuildinfo
 next-env.d.ts

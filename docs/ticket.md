@@ -48,7 +48,7 @@ Depends on: N0.
 
 | ID | Ticket | Acceptance | Status |
 |---|---|---|---|
-| AC-101 | Scaffold Next.js (App Router) + TypeScript + pnpm | `pnpm dev` serves a page; strict TS; eslint passes | todo |
+| AC-101 | Scaffold Next.js (App Router) + TypeScript + pnpm | `pnpm dev` serves a page; strict TS; eslint passes | done |
 | AC-102 | Create Neon projects: dev (with staging branch), prod | Dev project and staging branch exist; prod project on a paid plan before N10; credentials stored in secrets, not in git | todo |
 | AC-103 | Config and logging foundation (`lib/config/env.ts`, `lib/config/logger.ts`) | Env validated by Zod; logger never emits bodies, headers or keys (unit test) | todo |
 | AC-104 | Drizzle schema for all Section 5 tables except `case_embeddings` and `search_events` | `db:generate` produces migration matching the plan; enums and constraints present (partial unique on verdicts, `won` cannot become `withdrawn`) | todo |
@@ -77,7 +77,7 @@ Depends on: N1.
 | AC-206 | Redis rate limiter (Upstash) per key and per operator | Over limit returns 429 with retry-after and `RateLimit-*` headers | todo |
 | AC-207 | Quota table with new-agent limits (< 7 days) | New agent hits lower limits than an old one | todo |
 | AC-208 | Audit logging service | Key issue/revoke and agent changes write `audit_log` | todo |
-| AC-209 | Kill-switch hook in `middleware.ts` | Flag read from config; disabled agent gets `kill_switch` error (fully wired in N10) | todo |
+| AC-209 | Kill-switch hook in `proxy.ts` | Flag read from config; disabled agent gets `kill_switch` error (fully wired in N10) | todo |
 | AC-210 | CSRF protection on dashboard actions | Cross-site POST rejected | todo |
 | AC-211 | Register key format with GitHub secret scanning | Application submitted; outcome recorded (nice-to-have, not blocking) | todo |
 

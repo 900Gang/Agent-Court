@@ -368,7 +368,7 @@ Each node lists: Goal · Depends on · Deliverables · Done when.
 #### N2 — Agent registry and API keys
 - **Goal:** operators register agents and issue keys.
 - **Depends on:** N1
-- **Deliverables:** dashboard pages (list/create/suspend agents), key issue (shown once) / revoke / optional expiry, key format with a recognisable prefix (placeholder until D4), hashed storage with constant-time compare, scope enforcement middleware, Redis rate limiter, per-operator caps (5 agents, 3 keys per agent), operator/agent suspend cascades to keys, kill-switch hook in the middleware (flag read from Edge Config or env; wired fully in N10), audit log writes, CSRF protection on dashboard actions, registration of the key format with GitHub secret scanning (partner program, if accepted).
+- **Deliverables:** dashboard pages (list/create/suspend agents), key issue (shown once) / revoke / optional expiry, key format with a recognisable prefix (placeholder until D4), hashed storage with constant-time compare, scope enforcement middleware, Redis rate limiter, per-operator caps (5 agents, 3 keys per agent), operator/agent suspend cascades to keys, kill-switch hook in `proxy.ts` (flag read from Edge Config or env; wired fully in N10), audit log writes, CSRF protection on dashboard actions, registration of the key format with GitHub secret scanning (partner program, if accepted).
 - **Done when:** tests prove a revoked key fails, an expired key fails, a wrong-scope key fails, a suspended operator's keys fail, rate limit returns 429 with retry-after, raw keys never appear in DB or logs.
 
 #### N3 — Core case API

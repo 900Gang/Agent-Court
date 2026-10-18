@@ -57,7 +57,7 @@ agent-court/
 | `pnpm-lock.yaml` | Reproducible installs | Pins exact versions | N1 |
 | `tsconfig.json` | TypeScript settings | Strict mode, path alias `@/` to repo root | N1 |
 | `next.config.ts` | Next.js settings | Security headers (CSP, no-sniff, frame deny), disables source maps in prod | N1 |
-| `middleware.ts` | Runs before every request | Kill-switch check, Better Auth session check for dashboard/admin, blocks `/api/cron/*` without `CRON_SECRET` at the edge | N2 (kill switch wired fully in N10) |
+| `proxy.ts` | Runs before every request (Next.js 16 name for middleware; Node runtime) | Kill-switch check, Better Auth session check for dashboard/admin, blocks `/api/cron/*` without `CRON_SECRET` at the edge | N2 (kill switch wired fully in N10) |
 | `drizzle.config.ts` | Drizzle Kit settings | Points to `db/schema` and `db/migrations`; uses the direct DB URL for migrations | N1 |
 | `vitest.config.ts` | Unit/integration test runner | Test env, path alias, DB setup hooks | N1 |
 | `playwright.config.ts` | UI smoke test runner | Desktop and mobile viewport projects | N6 |
