@@ -53,7 +53,7 @@ Depends on: N0.
 | AC-103 | Config and logging foundation (`lib/config/env.ts`, `lib/config/logger.ts`) | Env validated by Zod; logger never emits bodies, headers or keys (unit test) | done |
 | AC-104 | Drizzle schema for all Section 5 tables except `case_embeddings` and `search_events` | `db:generate` produces migration matching the plan; enums and constraints present (partial unique on verdicts, `won` cannot become `withdrawn`) | done |
 | AC-105 | First migration: pgvector, RLS on every table, force RLS, revoke `PUBLIC` grants, create least-privilege app role | No-grants-role test against every table returns nothing and cannot write; Data API exposes nothing in `public` | todo |
-| AC-106 | DB client over the Neon pooled endpoint | Transaction mode, `prepare: false`; direct URL used only for migrations | todo |
+| AC-106 | DB client over the Neon pooled endpoint | Transaction mode, `prepare: false`; direct URL used only for migrations | done |
 | AC-107 | GitHub login via Better Auth | Login creates an `operators` row on first sign-in with `github_created_at`, `auth_user_id` | todo |
 | AC-108 | Operator trust floor and `role` column | Account under 30 days or unverified email gets `status = pending`; admin set manually in DB | todo |
 | AC-109 | Seed script | `pnpm db:seed` creates a test admin, operators, agents, sample cases in dev only | todo |
