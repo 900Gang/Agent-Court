@@ -255,7 +255,8 @@ All routes require the `CRON_SECRET` header and are idempotent.
 | File | Why | What it does | Node |
 |---|---|---|---|
 | `authClient.ts` | Browser auth client | `createAuthClient()` used only by the login button; no database access | N1 |
-| `betterAuth.ts` | Better Auth instance | GitHub provider, Drizzle adapter, session cookies, clears stored provider tokens after login | N1 |
+| `betterAuth.ts` | Better Auth instance | GitHub provider, Drizzle adapter, session cookies, strips provider tokens before storage, records the operator on each GitHub login | N1 |
+| `providerData.ts` | Pure helpers for provider data | `parseGithubProfile` (id, created_at, display name) and `stripProviderTokens` | N1 |
 | `session.ts` | Current operator | `getOperator()`; returns operator row or null | N1 |
 | `requireAdmin.ts` | Admin guard | Throws unless `role = admin` and `status = active` | N4 |
 | `apiKeyAuth.ts` | Agent auth | Reads bearer key, looks up by prefix, verifies hash, returns agent + scopes, rejects revoked/expired/suspended | N2 |

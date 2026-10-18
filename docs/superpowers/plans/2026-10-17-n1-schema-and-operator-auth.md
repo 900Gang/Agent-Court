@@ -21,7 +21,7 @@
 - `DATABASE_URL`, `DATABASE_URL_DIRECT`, `BETTER_AUTH_SECRET`, `GITHUB_CLIENT_SECRET` are server-only: never `NEXT_PUBLIC_`, never logged, never in client bundles.
 - Raw request bodies, headers and keys are never logged.
 - Operator trust floor: GitHub account at least 30 days old and a verified email, otherwise `status = 'pending'`. `role = 'admin'` is set manually in the database, never by code.
-- GitHub provider tokens are used once to read account age, then nulled in the `account` table.
+- GitHub provider tokens are never stored: both account hooks null them before the row is written. Account age comes from the GitHub profile Better Auth already fetches (`created_at`).
 - `audit_log` and `moderation_events` are append-only for the app role (no UPDATE, no DELETE).
 - `verdicts` allows one live verdict per case: unique on `case_id` where `status <> 'overturned'`.
 - An argument with status `won` cannot move to `withdrawn` (DB trigger).
@@ -32,9 +32,9 @@
 
 Behaviours the spec implies that no ticket's acceptance test names:
 
-1. GitHub account-age lookup fails (API down, missing token): operator stays `pending`, login still succeeds, nothing throws. Task 6.
+1. GitHub profile has no or an unparseable `created_at`: operator stays `pending`, login still succeeds, nothing throws. Task 6.
 2. A `suspended` operator logs in again: status and `role` unchanged. A `pending` operator whose account has now aged past 30 days becomes `active`. Task 6.
-3. Provider tokens are nulled even when the GitHub lookup throws. Task 6.
+3. Provider tokens are never stored: both account hooks strip them. Task 6.
 4. A second non-overturned verdict for one case is rejected; after the first is `overturned`, a new one is accepted. Task 3.
 5. Logger given a circular object, an `Error`, a `Bearer ...` string and a nested key named `authorization` never throws and never emits the secret. Task 2.
 6. Missing or malformed env in production fails fast naming the variable (not its value); a `NEXT_PUBLIC_*` variable equal to a server secret is rejected. Task 2.
@@ -200,25 +200,31 @@ Acceptance: `.env.local` exists, is gitignored, and holds the seven names in `.e
 
 ### Task 6: Operator login and trust floor (AC-107, AC-108)
 
+**Design change (2026-10-18, after reading Better Auth 1.7.10 source):** GitHub's profile already carries `created_at`, and Better Auth passes the raw profile to `user.validateUserInfo` on create-user, link-account and sign-in. So no extra GitHub API call and no provider tokens are needed. Tokens are stripped before storage instead of cleaned up afterwards.
+
 **Files:**
-- Create: `lib/services/operatorService.ts`, `lib/auth/betterAuth.ts`, `lib/auth/authClient.ts`, `lib/auth/session.ts`, `app/api/auth/[...all]/route.ts`, `app/auth/login/page.tsx`
-- Modify: `proxy.ts` (redirect unauthenticated requests to `/dashboard` and `/admin` to `/auth/login` using the session cookie; real validation stays in `getOperator()`)
-- Test: `tests/unit/trust.test.ts`, `tests/integration/operatorService.test.ts`
+- Create: `db/types.ts` (`Database` type accepted by services, so PGlite tests and the postgres-js client both fit), `lib/services/operatorService.ts`, `lib/auth/providerData.ts`, `lib/auth/betterAuth.ts`, `lib/auth/authClient.ts`, `lib/auth/session.ts`, `app/api/auth/[...all]/route.ts`, `app/auth/login/page.tsx`
+- Modify: `proxy.ts` (redirect requests to `/dashboard` and `/admin` without a session cookie to `/auth/login`; real validation stays in `getOperator()`)
+- Test: `tests/unit/trust.test.ts`, `tests/unit/providerData.test.ts`, `tests/integration/operatorService.test.ts`
 
 **Interfaces:**
 - `evaluateTrust(input: { githubCreatedAt: Date | null; emailVerified: boolean; now?: Date }): 'active' | 'pending'`. Null date or unverified email gives `'pending'`; age >= 30 days gives `'active'`.
-- `upsertOnLogin(db: Db, input: { authUserId: string; githubId: string; email: string | null; displayName: string; githubCreatedAt: Date | null; emailVerified: boolean; now?: Date }): Promise<Operator>`. Creates with computed status. Existing row: updates profile fields; `pending` becomes `active` when trust now passes; `suspended` and `role` are never changed.
-- `handleGithubLogin(db: Db, input: { userId: string; accountId: string; accessToken: string | null; githubId: string; email: string | null; emailVerified: boolean; displayName: string }, deps?: { fetchGithubCreatedAt?: (token: string) => Promise<Date | null>; now?: Date }): Promise<Operator>`. Looks up account age once with the token (errors mean `null`), calls `upsertOnLogin`, then nulls `accessToken`, `refreshToken`, `idToken` on the `account` row, in a `finally` so it happens even when the lookup throws.
-- `auth` (Better Auth instance, `lib/auth/betterAuth.ts`): GitHub provider with `user:email` scope, Drizzle adapter on `getDb()`, an account-create/update hook that calls `handleGithubLogin`. Confirm exact hook names and option keys against Better Auth's current docs while building.
-- `getOperator(): Promise<Operator | null>` reads the session via `auth.api.getSession({ headers })` and joins `operators` on `auth_user_id`.
+- `parseGithubProfile(profile: Record<string, unknown>): { githubId: string; githubCreatedAt: Date | null; displayName: string } | null`. Null when `id` is missing. `id` may be a number or string. A missing or unparseable `created_at` gives `githubCreatedAt: null`. `displayName` is `name`, else `login`, else `github:<id>`.
+- `recordGithubLogin(db: Db, input: { githubId: string; githubCreatedAt: Date | null; email: string | null; emailVerified: boolean; displayName: string }, now?: Date): Promise<Operator>`. Keyed by `github_id`. New operator: status from `evaluateTrust`, `role = 'operator'`, `verified_at` set when active. Existing: updates email and display name; keeps a stored `github_created_at` when the input is null; a `pending` operator becomes `active` (and gets `verified_at`) when trust now passes; `active` and `suspended` never change; `role` never changes.
+- `linkOperatorToUser(db: Db, authUserId: string): Promise<Operator | null>`. Finds the user's GitHub row in `account` (`provider_id = 'github'`), then sets `operators.auth_user_id` for the operator with that `github_id` only when it is null. Never overwrites an existing link. Returns the linked operator or null.
+- `stripProviderTokens<T extends object>(account: T): T` sets `accessToken`, `refreshToken`, `idToken`, `accessTokenExpiresAt`, `refreshTokenExpiresAt` to null.
+- `auth` (`lib/auth/betterAuth.ts`): GitHub provider with default scopes; `user.validateUserInfo` for provider `github` calls `parseGithubProfile` and `recordGithubLogin` inside try/catch (it must never throw: a throw rejects the login); `databaseHooks.account.create.before` and `.update.before` return `{ data: stripProviderTokens(account) }`; `databaseHooks.session.create.after` calls `linkOperatorToUser(db, session.userId)`; plugin `nextCookies()`.
+- `getOperator(): Promise<Operator | null>` reads the session via `auth.api.getSession({ headers: await headers() })` and joins `operators` on `auth_user_id`.
 
 - [ ] **Step 1: Write failing tests.**
   - unit `evaluateTrust`: 29 days gives `pending`; 30 days gives `active`; null date gives `pending`; unverified email gives `pending`.
-  - integration (PGlite): first login creates a row with `role = 'operator'`; second login does not duplicate; `suspended` stays `suspended`; `pending` with a now-30-day-old account becomes `active`; lookup returning null leaves `pending` without throwing; lookup that throws leaves `pending`, does not throw, and still nulls provider tokens; an existing `admin` keeps `role = 'admin'`.
-- [ ] **Step 2:** Run both files. Expected: FAIL.
-- [ ] **Step 3:** Implement the service functions first, then the Better Auth config, route handler (`toNextJsHandler(auth)`), auth client and login page. Nothing logs the token, code or secret.
+  - unit `parseGithubProfile`: numeric and string ids; missing id gives null; bad or missing `created_at` gives null date; display name fallbacks.
+  - unit `stripProviderTokens`: all five fields null, other fields kept.
+  - integration (PGlite): first login creates a row with `role = 'operator'`; second login does not duplicate; `suspended` stays `suspended`; `pending` with a now-30-day-old account becomes `active` and gets `verified_at`; null date leaves `pending` and does not erase a stored date; an existing `admin` keeps `role = 'admin'`; `linkOperatorToUser` links once and never overwrites an existing link.
+- [ ] **Step 2:** Run the test files. Expected: FAIL.
+- [ ] **Step 3:** Implement the pure functions and service first, then the Better Auth config, route handler (`toNextJsHandler(auth)`), auth client and login page. Nothing logs tokens, codes or secrets.
 - [ ] **Step 4:** Run tests, `pnpm lint`, `pnpm typecheck`. Expected: PASS.
-- [ ] **Step 5 (needs Task 0):** Live check against the dev database: run migrations, sign in with GitHub, confirm one `operators` row with the expected status and null provider tokens in `account`, sign out. Record the result in the PR description.
+- [ ] **Step 5 (needs Task 9 setup):** Live check against the dev database: sign in with GitHub, confirm one `operators` row with the expected status and linked `auth_user_id`, confirm `account` has null tokens, sign out. Record the result in the PR description.
 - [ ] **Step 6: Commit** `feat: GitHub operator login with trust floor (AC-107, AC-108)`.
 
 ---
