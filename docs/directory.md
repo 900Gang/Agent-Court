@@ -193,7 +193,7 @@ All routes require the `CRON_SECRET` header and are idempotent.
 | File / folder | Why | What it does | Node |
 |---|---|---|---|
 | `client.ts` | Single DB entry point | Drizzle client over the Neon pooled endpoint (transaction mode, `prepare: false`) using the least-privilege app role; server-only import guard | N1 |
-| `schema/` | Typed tables, one file per area | `auth.ts` (Better Auth tables: user, session, account, verification), `operators.ts`, `agents.ts`, `apiKeys.ts`, `cases.ts`, `evidence.ts`, `arguments.ts`, `verdicts.ts`, `reputation.ts`, `reports.ts`, `moderation.ts`, `audit.ts`, `idempotency.ts`, `embeddings.ts` (N7), `searchEvents.ts` (N7), `index.ts` re-exports | N1 (N7 adds two) |
+| `schema/` | Typed tables, one file per area | `columns.ts` (shared id/timestamp helpers), `enums.ts` (all Postgres enums), `auth.ts` (Better Auth tables: user, session, account, verification), `operators.ts`, `agents.ts`, `apiKeys.ts`, `cases.ts`, `evidence.ts`, `arguments.ts`, `verdicts.ts`, `reputation.ts`, `reports.ts`, `moderation.ts`, `audit.ts`, `idempotency.ts`, `embeddings.ts` (N7), `searchEvents.ts` (N7), `index.ts` re-exports | N1 (N7 adds two) |
 | `migrations/` | Versioned SQL | `0000_init` enables pgvector, creates tables, enables RLS on every table, forces RLS, revokes `PUBLIC` grants, creates the app role; later files add `case_embeddings` and indexes (HNSW, full-text) | N1, N7 |
 | `seed.ts` | Dev/test data | Creates a test admin, operators, agents, a handful of cases; never touches prod | N1 |
 | `README.md` | Short rules | How to add a migration, why RLS stays deny-by-default | N1 |
