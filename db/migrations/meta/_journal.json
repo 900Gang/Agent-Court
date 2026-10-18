@@ -8,6 +8,13 @@
       "when": 1792341706638,
       "tag": "0000_glorious_proudstar",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792342771171,
+      "tag": "0001_security",
+      "breakpoints": true
     }
   ]
 }
