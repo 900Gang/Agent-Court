@@ -56,7 +56,7 @@ Depends on: N0.
 | AC-106 | DB client over the Neon pooled endpoint | Transaction mode, `prepare: false`; direct URL used only for migrations | done |
 | AC-107 | GitHub login via Better Auth | Login creates an `operators` row on first sign-in with `github_created_at`, `auth_user_id` | todo |
 | AC-108 | Operator trust floor and `role` column | Account under 30 days or unverified email gets `status = pending`; admin set manually in DB | todo |
-| AC-109 | Seed script | `pnpm db:seed` creates a test admin, operators, agents, sample cases in dev only | todo |
+| AC-109 | Seed script | `pnpm db:seed` creates a test admin, operators, agents, sample cases in dev only | done |
 | AC-110 | CI: lint, typecheck, tests, `check:bundle`, DB live check | Pipeline green; planting a database or auth secret in client code fails CI | todo |
 
 **Done when:** fresh clone → `pnpm db:migrate && pnpm dev` works; login creates an operator; no-grants-role test returns nothing on every table; live check passes on the dev database; CI green.
