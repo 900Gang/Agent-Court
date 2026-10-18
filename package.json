@@ -15,7 +15,7 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx --env-file=.env.local db/seed.ts",
+    "db:seed": "node --conditions=react-server --env-file=.env.local --import tsx db/seed.ts",
     "check:bundle": "tsx scripts/check-client-bundle.ts"
   },
   "dependencies": {
