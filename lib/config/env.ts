@@ -11,6 +11,11 @@ export interface ServerEnv {
   githubClientId: string;
   githubClientSecret: string;
   appEnv: AppEnv;
+  /** Upstash Redis REST endpoint. Null in development and test when not configured (in-memory limiter is used). */
+  upstashUrl: string | null;
+  upstashToken: string | null;
+  /** When true, agent API traffic (/api/v1 and /mcp) is refused. */
+  killSwitch: boolean;
 }
 
 export class EnvError extends Error {
@@ -28,7 +33,13 @@ const KEYS = [
   "GITHUB_CLIENT_ID",
   "GITHUB_CLIENT_SECRET",
   "APP_ENV",
+  "UPSTASH_REDIS_REST_URL",
+  "UPSTASH_REDIS_REST_TOKEN",
+  "KILL_SWITCH",
 ] as const;
+
+const KILL_SWITCH_ON = ["on", "true", "1"];
+const KILL_SWITCH_OFF = ["", "off", "false", "0"];
 
 const schema = z
   .object({
@@ -39,6 +50,9 @@ const schema = z
     GITHUB_CLIENT_ID: z.string().min(1),
     GITHUB_CLIENT_SECRET: z.string().min(1),
     APP_ENV: z.enum(APP_ENVS).default("development"),
+    UPSTASH_REDIS_REST_URL: z.url().optional(),
+    UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
+    KILL_SWITCH: z.string().optional(),
   })
   .superRefine((env, ctx) => {
     if (env.APP_ENV === "production" && !env.BETTER_AUTH_URL.startsWith("https://")) {
@@ -47,6 +61,30 @@ const schema = z
         path: ["BETTER_AUTH_URL"],
         message: "must use https in production",
       });
+    }
+
+    // Upstash: both or neither, and required wherever the app is deployed.
+    const deployed = env.APP_ENV === "production" || env.APP_ENV === "staging";
+    const hasUrl = env.UPSTASH_REDIS_REST_URL !== undefined;
+    const hasToken = env.UPSTASH_REDIS_REST_TOKEN !== undefined;
+    const needed = deployed || hasUrl || hasToken;
+    for (const [present, name] of [
+      [hasUrl, "UPSTASH_REDIS_REST_URL"],
+      [hasToken, "UPSTASH_REDIS_REST_TOKEN"],
+    ] as const) {
+      if (needed && !present) {
+        ctx.addIssue({
+          code: "custom",
+          path: [name],
+          message: "required together, and in production and staging",
+        });
+      }
+    }
+
+    // A kill switch that silently ignores a typo is worse than none: fail fast.
+    const killSwitch = (env.KILL_SWITCH ?? "").toLowerCase();
+    if (![...KILL_SWITCH_ON, ...KILL_SWITCH_OFF].includes(killSwitch)) {
+      ctx.addIssue({ code: "custom", path: ["KILL_SWITCH"], message: "must be on or off" });
     }
   });
 
@@ -81,12 +119,13 @@ export function parseServerEnv(source: Record<string, string | undefined>): Serv
 
   const env = result.data;
 
-  const secrets = new Set([
+  const secrets = new Set<string>([
     env.DATABASE_URL,
     env.DATABASE_URL_DIRECT,
     env.BETTER_AUTH_SECRET,
     env.GITHUB_CLIENT_SECRET,
   ]);
+  if (env.UPSTASH_REDIS_REST_TOKEN) secrets.add(env.UPSTASH_REDIS_REST_TOKEN);
   const leaked = Object.entries(source)
     .filter(([name, value]) => name.startsWith("NEXT_PUBLIC_") && value !== undefined && secrets.has(value))
     .map(([name]) => name);
@@ -104,6 +143,9 @@ export function parseServerEnv(source: Record<string, string | undefined>): Serv
     githubClientId: env.GITHUB_CLIENT_ID,
     githubClientSecret: env.GITHUB_CLIENT_SECRET,
     appEnv: env.APP_ENV,
+    upstashUrl: env.UPSTASH_REDIS_REST_URL ?? null,
+    upstashToken: env.UPSTASH_REDIS_REST_TOKEN ?? null,
+    killSwitch: KILL_SWITCH_ON.includes((env.KILL_SWITCH ?? "").toLowerCase()),
   };
 }
 

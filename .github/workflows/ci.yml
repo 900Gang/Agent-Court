@@ -25,6 +25,8 @@ jobs:
       BETTER_AUTH_URL: http://localhost:3000
       GITHUB_CLIENT_ID: canary-github-client-id
       GITHUB_CLIENT_SECRET: canary-github-client-secret-0004
+      UPSTASH_REDIS_REST_URL: https://canary.upstash.example
+      UPSTASH_REDIS_REST_TOKEN: canary-upstash-token-000000000005
       APP_ENV: test
     steps:
       - uses: actions/checkout@v4

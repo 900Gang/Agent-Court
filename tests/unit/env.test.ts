@@ -129,3 +129,74 @@ describe("getServerEnv", () => {
     expect(getServerEnv().githubClientId).toBe("Ov23liChangedAfterFirstRead");
   });
 });
+describe("parseServerEnv: Upstash and kill switch", () => {
+  const upstash = {
+    UPSTASH_REDIS_REST_URL: "https://example-12345.upstash.io",
+    UPSTASH_REDIS_REST_TOKEN: "upstash-token-value-0123456789abcdef",
+  };
+  const production = {
+    ...valid,
+    APP_ENV: "production",
+    BETTER_AUTH_URL: "https://agent-court.example",
+  };
+
+  it("leaves the Upstash values null in development and test when they are not set", () => {
+    for (const appEnv of ["development", "test"]) {
+      const env = parseServerEnv({ ...valid, APP_ENV: appEnv });
+      expect(env.upstashUrl).toBeNull();
+      expect(env.upstashToken).toBeNull();
+    }
+  });
+
+  it("reads both Upstash values when they are set", () => {
+    const env = parseServerEnv({ ...valid, ...upstash });
+    expect(env.upstashUrl).toBe(upstash.UPSTASH_REDIS_REST_URL);
+    expect(env.upstashToken).toBe(upstash.UPSTASH_REDIS_REST_TOKEN);
+  });
+
+  it.each(["production", "staging"])("requires both Upstash values when APP_ENV is %s", (appEnv) => {
+    const message = thrownMessage(() => parseServerEnv({ ...production, APP_ENV: appEnv }));
+    expect(message).toContain("UPSTASH_REDIS_REST_URL");
+    expect(message).toContain("UPSTASH_REDIS_REST_TOKEN");
+    expect(parseServerEnv({ ...production, APP_ENV: appEnv, ...upstash }).upstashToken).toBe(
+      upstash.UPSTASH_REDIS_REST_TOKEN,
+    );
+  });
+
+  it("rejects one Upstash value without the other, in any environment", () => {
+    const missingToken = thrownMessage(() =>
+      parseServerEnv({ ...valid, UPSTASH_REDIS_REST_URL: upstash.UPSTASH_REDIS_REST_URL }),
+    );
+    expect(missingToken).toContain("UPSTASH_REDIS_REST_TOKEN");
+
+    const missingUrl = thrownMessage(() =>
+      parseServerEnv({ ...valid, UPSTASH_REDIS_REST_TOKEN: upstash.UPSTASH_REDIS_REST_TOKEN }),
+    );
+    expect(missingUrl).toContain("UPSTASH_REDIS_REST_URL");
+    expect(missingUrl).not.toContain(upstash.UPSTASH_REDIS_REST_TOKEN);
+  });
+
+  it("rejects the Upstash token held in a NEXT_PUBLIC_ variable", () => {
+    const message = thrownMessage(() =>
+      parseServerEnv({ ...valid, ...upstash, NEXT_PUBLIC_LEAKED: upstash.UPSTASH_REDIS_REST_TOKEN }),
+    );
+    expect(message).toContain("NEXT_PUBLIC_LEAKED");
+    expect(message).not.toContain(upstash.UPSTASH_REDIS_REST_TOKEN);
+  });
+
+  it.each(["on", "true", "1", "ON", "True"])("turns the kill switch on for %s", (value) => {
+    expect(parseServerEnv({ ...valid, KILL_SWITCH: value }).killSwitch).toBe(true);
+  });
+
+  it.each(["off", "false", "0", ""])("leaves the kill switch off for %j", (value) => {
+    expect(parseServerEnv({ ...valid, KILL_SWITCH: value }).killSwitch).toBe(false);
+  });
+
+  it("leaves the kill switch off when it is not set", () => {
+    expect(parseServerEnv(valid).killSwitch).toBe(false);
+  });
+
+  it.each(["maybe", "onn", "yes"])("fails fast on an unrecognised KILL_SWITCH value %j", (value) => {
+    expect(thrownMessage(() => parseServerEnv({ ...valid, KILL_SWITCH: value }))).toContain("KILL_SWITCH");
+  });
+});

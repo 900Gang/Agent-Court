@@ -12,6 +12,7 @@ export const apiKeys = pgTable(
       .references(() => agents.id),
     keyHash: text("key_hash").notNull().unique(),
     keyPrefix: text("key_prefix").notNull(),
+    label: text("label"),
     scopes: text("scopes")
       .array()
       .notNull()
@@ -23,6 +24,7 @@ export const apiKeys = pgTable(
   },
   (t) => [
     index("api_keys_agent_id_idx").on(t.agentId),
+    check("api_keys_label_length", sql`char_length(label) <= 60`),
     check(
       "api_keys_scopes_valid",
       sql`scopes <@ ARRAY['read', 'cases:write', 'arguments:write']::text[]`,

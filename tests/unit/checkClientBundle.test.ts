@@ -143,3 +143,17 @@ describe("checkBundle", () => {
     expect(result.ok).toBe(false);
   });
 });
+describe("Upstash token", () => {
+  const token = "upstash-token-value-0123456789abcdef";
+
+  it("is collected as a secret", () => {
+    expect(collectSecrets({ ...env, UPSTASH_REDIS_REST_TOKEN: token })).toContain(token);
+  });
+
+  it("is caught when it appears in the client bundle", async () => {
+    await write("chunks/app.js", `fetch("https://x", { headers: { authorization: "Bearer ${token}" } })`);
+    const result = await checkBundle(dir, { ...env, UPSTASH_REDIS_REST_TOKEN: token });
+    expect(result.ok).toBe(false);
+    expect(result.message).not.toContain(token);
+  });
+});

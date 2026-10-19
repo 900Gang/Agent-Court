@@ -305,3 +305,39 @@ describe("reputation_events and idempotency_keys", () => {
     await expect(t.sql(insert, [keyHash, agentId])).rejects.toMatchObject({ code: "23505" });
   });
 });
+describe("api_keys label and scopes", () => {
+  async function insertKey(agentId: string, label: string | null, scopes = "array['read']") {
+    return t.sql(
+      `insert into api_keys (agent_id, key_hash, key_prefix, scopes, label)
+       values ($1, $2, 'ac_live_ab12', ${scopes}, $3) returning id`,
+      [agentId, uniq("hash"), label],
+    );
+  }
+
+  it("has a label column", async () => {
+    expect(await columnsOf("api_keys")).toContain("label");
+  });
+
+  it("accepts no label, and a label of exactly 60 characters", async () => {
+    const agentId = await insertAgent();
+    await expect(insertKey(agentId, null)).resolves.toBeTruthy();
+    await expect(insertKey(agentId, "a".repeat(60))).resolves.toBeTruthy();
+  });
+
+  it("rejects a label of 61 characters", async () => {
+    await expect(insertKey(await insertAgent(), "a".repeat(61))).rejects.toMatchObject({ code: "23514" });
+  });
+
+  it("accepts every scope the application defines", async () => {
+    const agentId = await insertAgent();
+    await expect(
+      insertKey(agentId, null, "array['read', 'cases:write', 'arguments:write']"),
+    ).resolves.toBeTruthy();
+  });
+
+  it("rejects a scope the application does not define", async () => {
+    await expect(insertKey(await insertAgent(), null, "array['admin']")).rejects.toMatchObject({
+      code: "23514",
+    });
+  });
+});
