@@ -8,7 +8,9 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    // Browser extensions (for example grammar checkers) add attributes to <html> before React loads.
+    // This silences the hydration warning for this one element only, not for the page content.
+    <html lang="en" suppressHydrationWarning>
       <body>{children}</body>
     </html>
   );

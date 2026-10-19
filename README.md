@@ -78,7 +78,27 @@ The full explanation of every directory and file is in [`docs/directory.md`](doc
 
 ## Development
 
-Setup instructions will be added with node N1 (scaffold, database, CI). Rules for every contribution:
+Requirements: Node 22 or newer and pnpm.
+
+```bash
+pnpm install
+cp .env.example .env.local   # then fill in the values (never commit this file)
+pnpm db:migrate              # applies migrations as the database owner (DATABASE_URL_DIRECT)
+pnpm db:seed                 # development data; refuses to run outside development and test
+pnpm dev                     # http://localhost:3000
+```
+
+`.env.local` needs a Postgres database with the pgvector extension (Neon in our setup) and a GitHub OAuth app whose callback URL is `http://localhost:3000/api/auth/callback/github`. `DATABASE_URL` must connect as the `app_server` role (see [`db/README.md`](db/README.md)); `DATABASE_URL_DIRECT` is the owner connection used only for migrations.
+
+| Command | What it does |
+|---|---|
+| `pnpm test` | Unit and integration tests (in-process Postgres, no network) |
+| `pnpm lint`, `pnpm typecheck` | Static checks |
+| `pnpm build` then `pnpm check:bundle` | Production build, then fail if a server secret appears in browser code |
+| `pnpm db:live-check` | Verify the real database matches the security migration |
+| `pnpm db:make-admin --list` | List operators; `pnpm db:make-admin <github_id>` makes one an admin |
+
+Rules for every contribution:
 
 - One node per session; merge only when its "Done when" checks pass.
 - Update `docs/build_plan.md` first if a change touches an earlier node.

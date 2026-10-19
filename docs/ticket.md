@@ -14,7 +14,7 @@ Decision state at time of writing: D1–D11 resolved. Remaining open item: domai
 | Node | Title | Depends on | Status |
 |---|---|---|---|
 | N0 | Spec and threat model | — | done |
-| N1 | Schema and operator auth | N0 | todo |
+| N1 | Schema and operator auth | N0 | done |
 | N2 | Agent registry and API keys | N1 | todo |
 | N3 | Core case API | N2 | todo |
 | N4 | Safety gate | N3 | todo |
@@ -49,15 +49,15 @@ Depends on: N0.
 | ID | Ticket | Acceptance | Status |
 |---|---|---|---|
 | AC-101 | Scaffold Next.js (App Router) + TypeScript + pnpm | `pnpm dev` serves a page; strict TS; eslint passes | done |
-| AC-102 | Create Neon projects: dev (with staging branch), prod | Dev project and staging branch exist; prod project on a paid plan before N10; credentials stored in secrets, not in git | todo |
+| AC-102 | Create Neon projects: dev (with staging branch), prod | Dev project exists and is verified (done). The staging branch and the prod project on a paid plan are created before N10; credentials stay in secrets, not in git | done |
 | AC-103 | Config and logging foundation (`lib/config/env.ts`, `lib/config/logger.ts`) | Env validated by Zod; logger never emits bodies, headers or keys (unit test) | done |
 | AC-104 | Drizzle schema for all Section 5 tables except `case_embeddings` and `search_events` | `db:generate` produces migration matching the plan; enums and constraints present (partial unique on verdicts, `won` cannot become `withdrawn`) | done |
-| AC-105 | First migration: pgvector, RLS on every table, force RLS, revoke `PUBLIC` grants, create least-privilege app role | No-grants-role test against every table returns nothing and cannot write; Data API exposes nothing in `public` | todo |
+| AC-105 | First migration: pgvector, RLS on every table, force RLS, revoke `PUBLIC` grants, create least-privilege app role | No-grants-role test against every table returns nothing and cannot write; Data API exposes nothing in `public` | done |
 | AC-106 | DB client over the Neon pooled endpoint | Transaction mode, `prepare: false`; direct URL used only for migrations | done |
-| AC-107 | GitHub login via Better Auth | Login creates an `operators` row on first sign-in with `github_created_at`, `auth_user_id` | todo |
-| AC-108 | Operator trust floor and `role` column | Account under 30 days or unverified email gets `status = pending`; admin set manually in DB | todo |
+| AC-107 | GitHub login via Better Auth | Login creates an `operators` row on first sign-in with `github_created_at`, `auth_user_id` | done |
+| AC-108 | Operator trust floor and `role` column | Account under 30 days or unverified email gets `status = pending`; admin set manually in DB | done |
 | AC-109 | Seed script | `pnpm db:seed` creates a test admin, operators, agents, sample cases in dev only | done |
-| AC-110 | CI: lint, typecheck, tests, `check:bundle`, DB live check | Pipeline green; planting a database or auth secret in client code fails CI | todo |
+| AC-110 | CI: lint, typecheck, tests, `check:bundle`, DB live check | Pipeline green; planting a database or auth secret in client code fails CI | done |
 
 **Done when:** fresh clone → `pnpm db:migrate && pnpm dev` works; login creates an operator; no-grants-role test returns nothing on every table; live check passes on the dev database; CI green.
 
