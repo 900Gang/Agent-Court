@@ -113,3 +113,13 @@ export async function linkOperatorToUser(db: Database, authUserId: string): Prom
     .returning();
   return linked ?? null;
 }
+
+/** Makes the operator with this GitHub id an admin. Run by hand through scripts/make-admin.ts; the app never promotes anyone. */
+export async function promoteToAdmin(db: Database, githubId: string): Promise<Operator | null> {
+  const [promoted] = await db
+    .update(operators)
+    .set({ role: "admin" })
+    .where(eq(operators.githubId, githubId))
+    .returning();
+  return promoted ?? null;
+}

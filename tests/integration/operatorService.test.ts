@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { linkOperatorToUser, recordGithubLogin } from "@/lib/services/operatorService";
+import { linkOperatorToUser, promoteToAdmin, recordGithubLogin } from "@/lib/services/operatorService";
 import { createTestDb, type TestDb } from "../helpers/db";
 
 let t: TestDb;
@@ -189,5 +189,31 @@ describe("linkOperatorToUser", () => {
     const userId = await insertUser();
     await insertGithubAccount(userId, uniq("unknown-gh"));
     expect(await linkOperatorToUser(t.db, userId)).toBeNull();
+  });
+});
+describe("promoteToAdmin", () => {
+  it("makes an existing operator an admin and returns it", async () => {
+    const input = login();
+    await recordGithubLogin(t.db, input, now);
+    const promoted = await promoteToAdmin(t.db, input.githubId);
+    expect(promoted?.role).toBe("admin");
+    expect((await rowsFor(input.githubId))[0].role).toBe("admin");
+  });
+
+  it("is safe to run twice", async () => {
+    const input = login();
+    await recordGithubLogin(t.db, input, now);
+    await promoteToAdmin(t.db, input.githubId);
+    expect((await promoteToAdmin(t.db, input.githubId))?.role).toBe("admin");
+  });
+
+  it("returns null for a GitHub id that has never logged in", async () => {
+    expect(await promoteToAdmin(t.db, uniq("nobody"))).toBeNull();
+  });
+
+  it("does not change the operator's status", async () => {
+    const input = login({ githubCreatedAt: daysAgo(5) });
+    await recordGithubLogin(t.db, input, now);
+    expect((await promoteToAdmin(t.db, input.githubId))?.status).toBe("pending");
   });
 });
