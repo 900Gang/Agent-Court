@@ -32,6 +32,9 @@ describe("parseServerEnv", () => {
       githubClientId: valid.GITHUB_CLIENT_ID,
       githubClientSecret: valid.GITHUB_CLIENT_SECRET,
       appEnv: "development",
+      upstashUrl: null,
+      upstashToken: null,
+      killSwitch: false,
     });
   });
 
@@ -86,6 +89,8 @@ describe("parseServerEnv", () => {
         ...valid,
         APP_ENV: "production",
         BETTER_AUTH_URL: "https://agent-court.example",
+        UPSTASH_REDIS_REST_URL: "https://example-12345.upstash.io",
+        UPSTASH_REDIS_REST_TOKEN: "upstash-token-value-0123456789abcdef",
       }).appEnv,
     ).toBe("production");
   });

@@ -80,7 +80,7 @@ Depends on: N1.
 | AC-209 | Kill-switch hook in `proxy.ts` | `KILL_SWITCH=on` makes `/api/v1/*` and `/mcp` answer 503 `kill_switch` (faster mechanism in N10); `GET /api/v1/me` exercises auth, limits and the switch | todo |
 | AC-210 | CSRF protection on dashboard actions | Cross-site POST rejected | todo |
 | AC-211 | Register key format with GitHub secret scanning | Application submitted; outcome recorded (nice-to-have, not blocking) | todo |
-| AC-212 | Environment (Upstash, kill switch), `api_keys.label` migration, shared constants | Env validated (required in production and staging); migration applied; live check still passes | todo |
+| AC-212 | Environment (Upstash, kill switch), `api_keys.label` migration, shared constants | Env validated (required in production and staging); migration applied; live check still passes | done |
 | AC-213 | Terminal look and dashboard UI: window frame, control panel, key reveal panel, error blocks | Matches `docs/design/` mockups; component tests pass; reveal cannot be shown twice | todo |
 
 **Done when:** tests prove revoked, expired, wrong-scope and suspended-operator keys fail; rate limit returns 429 with retry-after; raw keys never appear in DB or logs.
