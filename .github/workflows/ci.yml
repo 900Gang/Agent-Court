@@ -1,12 +1,50 @@
 name: CI
 
-# Placeholder until node N1 (AC-110). Manual trigger only so an empty
-# workflow does not fail on every push.
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  placeholder:
+  verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Canary values, not real credentials. The build must never contain them: `pnpm check:bundle`
+      # fails if any of them appears in browser code.
+      DATABASE_URL: postgresql://app:canary-pooled-db-password-0001@canary-pooled.example.test/neondb?sslmode=require
+      DATABASE_URL_DIRECT: postgresql://owner:canary-direct-db-password-0002@canary-direct.example.test/neondb?sslmode=require
+      BETTER_AUTH_SECRET: canary-better-auth-secret-000000000000000003
+      BETTER_AUTH_URL: http://localhost:3000
+      GITHUB_CLIENT_ID: canary-github-client-id
+      GITHUB_CLIENT_SECRET: canary-github-client-secret-0004
+      APP_ENV: test
     steps:
-      - run: echo "CI not configured yet (see docs/ticket.md, AC-110)"
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - name: No server secret in the client bundle
+        run: pnpm check:bundle
+      - name: The leak check catches a planted secret
+        run: |
+          printf '%s' "$BETTER_AUTH_SECRET" > .next/static/planted-leak.txt
+          if pnpm check:bundle; then
+            echo "The leak check did not catch a planted secret"
+            exit 1
+          fi
+          rm .next/static/planted-leak.txt

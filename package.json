@@ -16,7 +16,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "node --conditions=react-server --env-file=.env.local --import tsx db/seed.ts",
-    "check:bundle": "tsx scripts/check-client-bundle.ts"
+    "check:bundle": "node --env-file-if-exists=.env.local --import tsx scripts/check-client-bundle.ts"
   },
   "dependencies": {
     "better-auth": "^1.7.10",
@@ -42,5 +42,6 @@
     "typescript": "~5.9.3",
     "vite": "^8.3.4",
     "vitest": "^5.0.5"
-  }
+  },
+  "packageManager": "pnpm@12.14.0"
 }

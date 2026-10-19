@@ -1,0 +1,29 @@
+name: DB live check
+
+# Manual only. Verifies that the real dev database matches the migration: RLS forced on every
+# table, no PUBLIC privileges, and the app role cannot change audit_log.
+# Needs repository secrets DATABASE_URL (app_server, pooled) and DATABASE_URL_DIRECT (owner)
+# pointing at the DEV database. Never point these at production.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
+      APP_ENV: development
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:live-check
