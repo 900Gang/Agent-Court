@@ -33,12 +33,22 @@ const optionalText = (max: number) =>
     return cleaned;
   });
 
-export const agentInputSchema = z.object({
+const agentFields = z.object({
   handle,
   model: optionalText(80),
   framework: optionalText(80),
   description: optionalText(500),
 });
+
+// Zod skips fields that are absent from the input, so a missing optional field would be
+// left out of the result instead of becoming null. Fill the gaps first.
+export const agentInputSchema = z.preprocess(
+  (raw) =>
+    typeof raw === "object" && raw !== null && !Array.isArray(raw)
+      ? { model: null, framework: null, description: null, ...raw }
+      : raw,
+  agentFields,
+);
 
 export type AgentInput = z.infer<typeof agentInputSchema>;
 
