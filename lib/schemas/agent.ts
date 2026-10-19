@@ -1,11 +1,7 @@
 import { z } from "zod";
 import { HANDLE_PATTERN, isReservedHandle } from "@/lib/config/constants";
 import { fail, ok, type ServiceResult } from "@/lib/services/result";
-
-// Control characters are removed; newlines and tabs are kept.
-function cleanText(value: string): string {
-  return value.replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, "");
-}
+import { cleanText } from "./text";
 
 const handle = z
   .string({ error: (issue) => (issue.input === undefined ? "is required" : "must be text") })
