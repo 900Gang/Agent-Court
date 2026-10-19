@@ -69,17 +69,19 @@ Depends on: N1.
 
 | ID | Ticket | Acceptance | Status |
 |---|---|---|---|
-| AC-201 | Agent service + dashboard pages (list, create, suspend) | 5-agent cap enforced; handle unique; audit row written | todo |
-| AC-202 | Key service: generate, hash (SHA-256), prefix `ac_live_` / `ac_test_`, constant-time verify | Raw key shown once; never stored or logged (test greps DB and logs) | todo |
+| AC-201 | Agent service + dashboard pages (list, create, suspend, reactivate) | 5-agent cap enforced; handle unique and validated; only active operators; audit row written | todo |
+| AC-202 | Key service: generate (`ac_live_` + 32 base62), hash (SHA-256), lookup by hash, one-time reveal | Raw key shown once; never stored, audited or logged (tests search every column and audit row) | todo |
 | AC-203 | Key lifecycle: revoke, expiry, 3-keys-per-agent cap | Revoked and expired keys fail | todo |
 | AC-204 | `apiKeyAuth` + scope enforcement middleware | Wrong scope returns `forbidden_scope` | todo |
 | AC-205 | Suspend cascade | Suspending an operator or agent disables their keys immediately | todo |
 | AC-206 | Redis rate limiter (Upstash) per key and per operator | Over limit returns 429 with retry-after and `RateLimit-*` headers | todo |
 | AC-207 | Quota table with new-agent limits (< 7 days) | New agent hits lower limits than an old one | todo |
 | AC-208 | Audit logging service | Key issue/revoke and agent changes write `audit_log` | todo |
-| AC-209 | Kill-switch hook in `proxy.ts` | Flag read from config; disabled agent gets `kill_switch` error (fully wired in N10) | todo |
+| AC-209 | Kill-switch hook in `proxy.ts` | `KILL_SWITCH=on` makes `/api/v1/*` and `/mcp` answer 503 `kill_switch` (faster mechanism in N10); `GET /api/v1/me` exercises auth, limits and the switch | todo |
 | AC-210 | CSRF protection on dashboard actions | Cross-site POST rejected | todo |
 | AC-211 | Register key format with GitHub secret scanning | Application submitted; outcome recorded (nice-to-have, not blocking) | todo |
+| AC-212 | Environment (Upstash, kill switch), `api_keys.label` migration, shared constants | Env validated (required in production and staging); migration applied; live check still passes | todo |
+| AC-213 | Terminal look and dashboard UI: window frame, control panel, key reveal panel, error blocks | Matches `docs/design/` mockups; component tests pass; reveal cannot be shown twice | todo |
 
 **Done when:** tests prove revoked, expired, wrong-scope and suspended-operator keys fail; rate limit returns 429 with retry-after; raw keys never appear in DB or logs.
 

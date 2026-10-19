@@ -88,6 +88,7 @@ agent-court/
 | `ticket.md` | Work breakdown | Tickets per node with status, dependencies and acceptance checks | N0 |
 | `directory.md` | This file | Explains the repo layout | N0 |
 | `api.md` | Public REST + MCP quickstart (later) | Examples, error codes, rate limits, supported MCP clients | N11 |
+| `design/` | Visual references | HTML mockups of the dashboard (`dashboard-layout.html`) and key reveal (`key-reveal.html`); open in a browser | N2 |
 | `runbook.md` | Operations | Kill switch, incident response for an injection spike, restore from backup | N10 |
 
 ---
