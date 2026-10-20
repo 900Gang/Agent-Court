@@ -1,0 +1,308 @@
+/* Agent-Court terminal look. Tokens come from docs/design/*.html. Brand red is only ever an
+   outline or text on black; errors use a solid red block with a hazard stripe. */
+:root {
+  --bg: #070304;
+  --panel: #0d0506;
+  --line: #8f1414;
+  --line-dim: #4a0d0d;
+  --red: #ff2d2d;
+  --red-dim: #c01f1f; /* decoration only: below text contrast */
+  --text: #ece4e4;
+  --muted: #a39494;
+  --ok: #3ddc84;
+  --warn: #ffb020;
+  --on-red: #090303;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: #120808;
+}
+
+body {
+  margin: 0;
+  padding: 24px;
+  background: #120808;
+  color: var(--text);
+  font-family: "JetBrains Mono", "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 2px;
+}
+
+a {
+  color: inherit;
+}
+
+/* Window frame */
+.win {
+  border: 1px solid var(--line);
+  background: var(--bg);
+  box-shadow: 0 0 0 4px #1a0a0a;
+}
+
+.win-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--red);
+  letter-spacing: 0.08em;
+  font-size: 13px;
+}
+
+.win-ctl {
+  letter-spacing: 6px;
+  color: var(--red-dim);
+}
+
+/* Console layout */
+.shell {
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  min-height: 560px;
+}
+
+.main {
+  padding: 22px 26px;
+}
+
+.side {
+  border-right: 1px solid var(--line-dim);
+  padding: 16px 0;
+}
+
+.side-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px 16px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--line-dim);
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.side-brand svg {
+  width: 34px;
+  height: 34px;
+  stroke: var(--red);
+  fill: none;
+  stroke-width: 2.4;
+}
+
+.side-item {
+  display: block;
+  padding: 9px 16px;
+  color: var(--muted);
+  text-decoration: none;
+  letter-spacing: 0.06em;
+}
+
+.side-item small {
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+.side-current {
+  color: var(--text);
+  background: linear-gradient(90deg, rgba(255, 45, 45, 0.22), transparent);
+  border-left: 3px solid var(--red);
+  padding-left: 13px;
+}
+
+.side-disabled {
+  cursor: not-allowed;
+}
+
+.side-who {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--line-dim);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.side-who b {
+  color: var(--text);
+  font-weight: 400;
+  word-break: break-word;
+}
+
+.side-status {
+  color: var(--ok);
+}
+
+/* Panels */
+.panel {
+  border: 1px solid var(--line-dim);
+  background: var(--panel);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.panel-title {
+  margin: 0 0 10px;
+  color: var(--red);
+  letter-spacing: 0.1em;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+/* Progress bars */
+.bar-row {
+  display: grid;
+  grid-template-columns: 150px 1fr 90px;
+  gap: 14px;
+  align-items: center;
+  margin: 7px 0;
+}
+
+.bar {
+  height: 14px;
+  padding: 2px;
+  border: 1px solid var(--line);
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  background: repeating-linear-gradient(90deg, var(--red) 0 3px, transparent 3px 5px);
+}
+
+.bar-value {
+  text-align: right;
+  color: var(--red);
+}
+
+/* Status chips */
+.chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border: 1px solid;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.chip-ok {
+  color: var(--ok);
+  border-color: #1d6b43;
+}
+
+.chip-warn {
+  color: var(--warn);
+  border-color: #7a5410;
+}
+
+.chip-off {
+  color: var(--muted);
+  border-color: #4b3b3b;
+}
+
+/* Error block: solid red with a hazard stripe. Never used for anything but errors. */
+.err {
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  border: 1px solid var(--red);
+  margin-bottom: 10px;
+}
+
+.err-edge {
+  background: repeating-linear-gradient(135deg, var(--red) 0 6px, var(--on-red) 6px 12px);
+}
+
+.err-msg {
+  background: var(--red);
+  color: var(--on-red);
+  padding: 9px 14px;
+}
+
+.err-hint {
+  grid-column: 1 / -1;
+  padding: 8px 14px;
+  background: #1a0707;
+  border-top: 1px solid var(--red);
+  font-size: 12px;
+}
+
+/* Notices: amber */
+.notice {
+  border: 1px solid #7a5410;
+  padding: 9px 14px;
+  color: var(--warn);
+  margin-bottom: 10px;
+}
+
+.notice h2 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+}
+
+.notice p {
+  margin: 4px 0;
+}
+
+/* Buttons */
+.btn {
+  background: transparent;
+  color: var(--red);
+  border: 1px solid var(--red);
+  padding: 6px 12px;
+  font: inherit;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.btn-solid {
+  background: var(--red);
+  color: var(--on-red);
+  font-weight: 700;
+}
+
+.btn:disabled {
+  color: #8a5454;
+  border-color: #3b1a1a;
+  background: transparent;
+  cursor: not-allowed;
+}
+
+/* Narrow screens: stack the sidebar above the content */
+@media (max-width: 720px) {
+  body {
+    padding: 8px;
+  }
+
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .side {
+    border-right: 0;
+    border-bottom: 1px solid var(--line-dim);
+  }
+
+  .main {
+    padding: 16px;
+  }
+
+  .bar-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .bar-value {
+    text-align: left;
+  }
+}
