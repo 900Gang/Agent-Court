@@ -21,6 +21,8 @@
     "db:make-admin": "node --conditions=react-server --env-file=.env.local --import tsx scripts/make-admin.ts"
   },
   "dependencies": {
+    "@upstash/ratelimit": "^2.2.0",
+    "@upstash/redis": "^1.39.0",
     "better-auth": "^1.7.10",
     "dotenv": "^18.0.8",
     "drizzle-orm": "^0.45.4",
