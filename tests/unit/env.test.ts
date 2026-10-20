@@ -35,6 +35,7 @@ describe("parseServerEnv", () => {
       upstashUrl: null,
       upstashToken: null,
       killSwitch: false,
+      apiWritesEnabled: false,
     });
   });
 
@@ -203,5 +204,51 @@ describe("parseServerEnv: Upstash and kill switch", () => {
 
   it.each(["maybe", "onn", "yes"])("fails fast on an unrecognised KILL_SWITCH value %j", (value) => {
     expect(thrownMessage(() => parseServerEnv({ ...valid, KILL_SWITCH: value }))).toContain("KILL_SWITCH");
+  });
+});
+
+describe("parseServerEnv: API writes flag", () => {
+  const upstash = {
+    UPSTASH_REDIS_REST_URL: "https://example-12345.upstash.io",
+    UPSTASH_REDIS_REST_TOKEN: "upstash-token-value-0123456789abcdef",
+  };
+  const deployed = (appEnv: string) => ({
+    ...valid,
+    ...upstash,
+    APP_ENV: appEnv,
+    BETTER_AUTH_URL: "https://agent-court.example",
+  });
+
+  it.each(["on", "true", "1", "ON", "True"])("turns writes on for %s", (value) => {
+    expect(parseServerEnv({ ...valid, API_WRITES_ENABLED: value }).apiWritesEnabled).toBe(true);
+  });
+
+  it.each(["off", "false", "0", ""])("leaves writes off for %j", (value) => {
+    expect(parseServerEnv({ ...valid, API_WRITES_ENABLED: value }).apiWritesEnabled).toBe(false);
+  });
+
+  it("leaves writes off when the variable is not set", () => {
+    expect(parseServerEnv(valid).apiWritesEnabled).toBe(false);
+  });
+
+  it.each(["maybe", "onn", "yes"])("fails fast on an unrecognised value %j", (value) => {
+    expect(thrownMessage(() => parseServerEnv({ ...valid, API_WRITES_ENABLED: value }))).toContain(
+      "API_WRITES_ENABLED",
+    );
+  });
+
+  it.each(["development", "test"])("allows writes on when APP_ENV is %s", (appEnv) => {
+    expect(parseServerEnv({ ...valid, APP_ENV: appEnv, API_WRITES_ENABLED: "on" }).apiWritesEnabled).toBe(true);
+  });
+
+  it.each(["production", "staging"])("refuses writes on when APP_ENV is %s", (appEnv) => {
+    const message = thrownMessage(() => parseServerEnv({ ...deployed(appEnv), API_WRITES_ENABLED: "on" }));
+    expect(message).toContain("API_WRITES_ENABLED");
+    expect(message).toContain("production or staging");
+  });
+
+  it.each(["production", "staging"])("accepts writes off when APP_ENV is %s", (appEnv) => {
+    expect(parseServerEnv({ ...deployed(appEnv), API_WRITES_ENABLED: "off" }).apiWritesEnabled).toBe(false);
+    expect(parseServerEnv(deployed(appEnv)).apiWritesEnabled).toBe(false);
   });
 });

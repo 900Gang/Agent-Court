@@ -32,3 +32,29 @@ export function isReservedHandle(handle: string): boolean {
     RESERVED_HANDLE_PREFIXES.some((prefix) => lower.startsWith(prefix))
   );
 }
+
+// Content limits. The safety gate (N4) re-checks sizes after it normalises text.
+export const LIMITS = {
+  title: 200,
+  summary: 4000,
+  expectedActual: 2000,
+  evidenceText: 32000,
+  evidencePerCase: 10,
+  argumentField: 8000,
+  argumentsPerCase: 20,
+  tagsPerCase: 8,
+  environmentBytes: 4096,
+  bodyBytes: 262144,
+} as const;
+
+// Must match the database check `cases_tags_valid`.
+export const TAG_PATTERN = /^[a-z0-9-]{1,32}$/;
+
+export const PAGE = { defaultLimit: 20, maxLimit: 50 } as const;
+
+/** Case statuses any agent with the read scope may see. Held and withdrawn items belong to their owner only. */
+export const PUBLIC_CASE_STATUSES = ["open", "argued", "resolved", "under_appeal", "closed_unresolved"] as const;
+export type PublicCaseStatus = (typeof PUBLIC_CASE_STATUSES)[number];
+
+export const IDEMPOTENCY_TTL_HOURS = 24;
+export const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9_.:-]{8,128}$/;

@@ -16,6 +16,8 @@ export interface ServerEnv {
   upstashToken: string | null;
   /** When true, agent API traffic (/api/v1 and /mcp) is refused. */
   killSwitch: boolean;
+  /** When true, agent write routes accept requests. Off by default; refused in production and staging until the safety gate ships. */
+  apiWritesEnabled: boolean;
 }
 
 export class EnvError extends Error {
@@ -36,10 +38,11 @@ const KEYS = [
   "UPSTASH_REDIS_REST_URL",
   "UPSTASH_REDIS_REST_TOKEN",
   "KILL_SWITCH",
+  "API_WRITES_ENABLED",
 ] as const;
 
-const KILL_SWITCH_ON = ["on", "true", "1"];
-const KILL_SWITCH_OFF = ["", "off", "false", "0"];
+const FLAG_ON = ["on", "true", "1"];
+const FLAG_OFF = ["", "off", "false", "0"];
 
 const schema = z
   .object({
@@ -53,6 +56,7 @@ const schema = z
     UPSTASH_REDIS_REST_URL: z.url().optional(),
     UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
     KILL_SWITCH: z.string().optional(),
+    API_WRITES_ENABLED: z.string().optional(),
   })
   .superRefine((env, ctx) => {
     if (env.APP_ENV === "production" && !env.BETTER_AUTH_URL.startsWith("https://")) {
@@ -83,8 +87,20 @@ const schema = z
 
     // A kill switch that silently ignores a typo is worse than none: fail fast.
     const killSwitch = (env.KILL_SWITCH ?? "").toLowerCase();
-    if (![...KILL_SWITCH_ON, ...KILL_SWITCH_OFF].includes(killSwitch)) {
+    if (![...FLAG_ON, ...FLAG_OFF].includes(killSwitch)) {
       ctx.addIssue({ code: "custom", path: ["KILL_SWITCH"], message: "must be on or off" });
+    }
+
+    // Same rule for the write flag. The N3 gate stub does not redact, so writes stay off where real data lives.
+    const writes = (env.API_WRITES_ENABLED ?? "").toLowerCase();
+    if (![...FLAG_ON, ...FLAG_OFF].includes(writes)) {
+      ctx.addIssue({ code: "custom", path: ["API_WRITES_ENABLED"], message: "must be on or off" });
+    } else if (FLAG_ON.includes(writes) && deployed) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["API_WRITES_ENABLED"],
+        message: "not allowed in production or staging until the safety gate ships",
+      });
     }
   });
 
@@ -145,7 +161,8 @@ export function parseServerEnv(source: Record<string, string | undefined>): Serv
     appEnv: env.APP_ENV,
     upstashUrl: env.UPSTASH_REDIS_REST_URL ?? null,
     upstashToken: env.UPSTASH_REDIS_REST_TOKEN ?? null,
-    killSwitch: KILL_SWITCH_ON.includes((env.KILL_SWITCH ?? "").toLowerCase()),
+    killSwitch: FLAG_ON.includes((env.KILL_SWITCH ?? "").toLowerCase()),
+    apiWritesEnabled: FLAG_ON.includes((env.API_WRITES_ENABLED ?? "").toLowerCase()),
   };
 }
 

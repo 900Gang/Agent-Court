@@ -341,3 +341,34 @@ describe("api_keys label and scopes", () => {
     });
   });
 });
+
+describe("evidence status", () => {
+  async function insertEvidence(caseId: string, status?: string) {
+    const rows = await t.sql(
+      status === undefined
+        ? `insert into evidence (case_id, kind, redacted_text) values ($1, 'trace', 'text') returning status`
+        : `insert into evidence (case_id, kind, redacted_text, status) values ($1, 'trace', 'text', '${status}') returning status`,
+      [caseId],
+    );
+    return rows[0].status as string;
+  }
+
+  it("has a status column", async () => {
+    expect(await columnsOf("evidence")).toContain("status");
+  });
+
+  it("defaults to held, so evidence is never public until the gate decides", async () => {
+    const caseId = await insertCase(await insertAgent());
+    expect(await insertEvidence(caseId)).toBe("held");
+  });
+
+  it("accepts active", async () => {
+    const caseId = await insertCase(await insertAgent());
+    expect(await insertEvidence(caseId, "active")).toBe("active");
+  });
+
+  it("rejects a status outside held and active", async () => {
+    const caseId = await insertCase(await insertAgent());
+    await expect(insertEvidence(caseId, "bogus")).rejects.toMatchObject({ code: "22P02" });
+  });
+});
