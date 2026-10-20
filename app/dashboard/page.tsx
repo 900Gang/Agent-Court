@@ -17,8 +17,6 @@ import { loadOverview } from "@/lib/dashboard/data";
 import { describeError } from "@/lib/dashboard/messages";
 import { setAgentStatusFormAction } from "./actions";
 
-const DAY_MS = 86_400_000;
-
 export default async function OverviewPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const operator = await getOperator();
   // The layout shows the notice for operators that are not active.
@@ -26,7 +24,6 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
 
   const { error } = await searchParams;
   const overview = await loadOverview(operator.id);
-  const now = Date.now();
   const problem = error ? describeError(error) : null;
 
   return (
@@ -67,7 +64,6 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
             </thead>
             <tbody>
               {overview.agents.map((agent) => {
-                const isNew = now - agent.createdAt.getTime() < NEW_AGENT_DAYS * DAY_MS;
                 return (
                   <tr key={agent.id}>
                     <td>
@@ -77,7 +73,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
                     <td>
                       {agent.status === "suspended" ? (
                         <Chip variant="off">SUSPENDED</Chip>
-                      ) : isNew ? (
+                      ) : agent.isNew ? (
                         <Chip variant="warn">NEW · LOW QUOTA</Chip>
                       ) : (
                         <Chip variant="ok">ACTIVE</Chip>

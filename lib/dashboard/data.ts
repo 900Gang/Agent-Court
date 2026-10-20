@@ -2,11 +2,14 @@ import "server-only";
 import { and, count, eq, gt, isNull, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { agents, apiKeys, type Agent } from "@/db/schema";
+import { NEW_AGENT_DAYS } from "@/lib/config/constants";
 import { getServerEnv } from "@/lib/config/env";
 import { getOwnedAgent, listAgents } from "@/lib/services/agentService";
 import { listKeys, type KeyListItem } from "@/lib/services/keyService";
 
-export type AgentRow = Agent & { activeKeys: number };
+export type AgentRow = Agent & { activeKeys: number; isNew: boolean };
+
+const DAY_MS = 86_400_000;
 
 export async function loadOverview(operatorId: string): Promise<{ agents: AgentRow[]; activeKeys: number }> {
   const db = getDb();
@@ -24,7 +27,12 @@ export async function loadOverview(operatorId: string): Promise<{ agents: AgentR
     )
     .groupBy(apiKeys.agentId);
   const byAgent = new Map(counts.map((row) => [row.agentId, row.total]));
-  const rows = list.map((agent) => ({ ...agent, activeKeys: byAgent.get(agent.id) ?? 0 }));
+  const now = Date.now();
+  const rows = list.map((agent) => ({
+    ...agent,
+    activeKeys: byAgent.get(agent.id) ?? 0,
+    isNew: now - agent.createdAt.getTime() < NEW_AGENT_DAYS * DAY_MS,
+  }));
   return { agents: rows, activeKeys: rows.reduce((sum, row) => sum + row.activeKeys, 0) };
 }
 
