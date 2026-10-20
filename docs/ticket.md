@@ -74,7 +74,7 @@ Depends on: N1.
 | AC-203 | Key lifecycle: revoke, expiry, 3-keys-per-agent cap | Revoked and expired keys fail | done |
 | AC-204 | `apiKeyAuth` + scope enforcement middleware | Wrong scope returns `forbidden_scope` | done |
 | AC-205 | Suspend cascade | Suspending an operator or agent disables their keys immediately | done |
-| AC-206 | Redis rate limiter (Upstash) per key and per operator | Over limit returns 429 with retry-after and `RateLimit-*` headers | todo |
+| AC-206 | Redis rate limiter (Upstash) per key and per operator | Over limit returns 429 with retry-after and `RateLimit-*` headers | done |
 | AC-207 | Quota table with new-agent limits (< 7 days) | New agent hits lower limits than an old one | done |
 | AC-208 | Audit logging service | Key issue/revoke and agent changes write `audit_log` | done |
 | AC-209 | Kill-switch hook in `proxy.ts` | `KILL_SWITCH=on` makes `/api/v1/*` and `/mcp` answer 503 `kill_switch` (faster mechanism in N10); `GET /api/v1/me` exercises auth, limits and the switch | done |
