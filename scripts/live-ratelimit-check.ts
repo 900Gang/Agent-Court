@@ -61,26 +61,37 @@ async function main(): Promise<void> {
   }
 
   const stamp = `live-check:${Date.now()}:${Math.random().toString(36).slice(2)}`;
-  const first = createUpstashLimiter(url, token);
-  const second = createUpstashLimiter(url, token);
+  try {
+    const first = createUpstashLimiter(url, token);
+    const second = createUpstashLimiter(url, token);
 
-  const basic = await runLimiterCheck(first, stamp, 3);
-  lines.push(...basic.lines);
-  if (!basic.ok) ok = false;
+    const basic = await runLimiterCheck(first, stamp, 3);
+    lines.push(...basic.lines);
+    if (!basic.ok) ok = false;
 
-  const stored = await redis.keys(`agent-court:rl:${stamp}*`);
-  record(stored.length > 0, "request counters are stored in Redis, not in this process");
+    const stored = await redis.keys(`agent-court:rl:${stamp}*`);
+    record(stored.length > 0, "request counters are stored in Redis, not in this process");
 
-  // Two limiter instances stand in for two serverless instances: they must share one count.
-  const shared = `${stamp}:shared`;
-  await first.check(shared, 3);
-  await first.check(shared, 3);
-  const third = await second.check(shared, 3);
-  const fourth = await second.check(shared, 3);
-  record(third.allowed && !fourth.allowed, "a second limiter instance sees the same counters");
+    // Two limiter instances stand in for two serverless instances: they must share one count.
+    const shared = `${stamp}:shared`;
+    await first.check(shared, 3);
+    await first.check(shared, 3);
+    const third = await second.check(shared, 3);
+    const fourth = await second.check(shared, 3);
+    record(third.allowed && !fourth.allowed, "a second limiter instance sees the same counters");
+  } catch (error) {
+    record(false, `a Redis command failed: ${error instanceof Error ? error.message : "unknown error"}`);
+    lines.push(
+      "HINT  NOPERM means the token cannot run these commands. Use the standard read-write REST token, not the read-only one (read-only tokens start with 'gg').",
+    );
+  }
 
-  const leftovers = await redis.keys(`agent-court:rl:${stamp}*`);
-  if (leftovers.length > 0) await redis.del(...leftovers);
+  try {
+    const leftovers = await redis.keys(`agent-court:rl:${stamp}*`);
+    if (leftovers.length > 0) await redis.del(...leftovers);
+  } catch {
+    // Best-effort cleanup only.
+  }
 
   for (const line of lines) console.log(line);
   console.log(ok ? `\nAll ${lines.length} checks passed.` : "\nSome checks FAILED.");
