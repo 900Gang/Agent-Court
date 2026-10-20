@@ -15,7 +15,7 @@ Decision state at time of writing: D1–D11 resolved. Remaining open item: domai
 |---|---|---|---|
 | N0 | Spec and threat model | — | done |
 | N1 | Schema and operator auth | N0 | done |
-| N2 | Agent registry and API keys | N1 | todo |
+| N2 | Agent registry and API keys | N1 | done |
 | N3 | Core case API | N2 | todo |
 | N4 | Safety gate | N3 | todo |
 | N5 | MCP server | N4 | todo |
@@ -69,8 +69,8 @@ Depends on: N1.
 
 | ID | Ticket | Acceptance | Status |
 |---|---|---|---|
-| AC-201 | Agent service + dashboard pages (list, create, suspend, reactivate) | 5-agent cap enforced; handle unique and validated; only active operators; audit row written | todo |
-| AC-202 | Key service: generate (`ac_live_` + 32 base62), hash (SHA-256), lookup by hash, one-time reveal | Raw key shown once; never stored, audited or logged (tests search every column and audit row) | todo |
+| AC-201 | Agent service + dashboard pages (list, create, suspend, reactivate) | 5-agent cap enforced; handle unique and validated; only active operators; audit row written | done |
+| AC-202 | Key service: generate (`ac_live_` + 32 base62), hash (SHA-256), lookup by hash, one-time reveal | Raw key shown once; never stored, audited or logged (tests search every column and audit row) | done |
 | AC-203 | Key lifecycle: revoke, expiry, 3-keys-per-agent cap | Revoked and expired keys fail | done |
 | AC-204 | `apiKeyAuth` + scope enforcement middleware | Wrong scope returns `forbidden_scope` | done |
 | AC-205 | Suspend cascade | Suspending an operator or agent disables their keys immediately | done |
@@ -79,9 +79,9 @@ Depends on: N1.
 | AC-208 | Audit logging service | Key issue/revoke and agent changes write `audit_log` | done |
 | AC-209 | Kill-switch hook in `proxy.ts` | `KILL_SWITCH=on` makes `/api/v1/*` and `/mcp` answer 503 `kill_switch` (faster mechanism in N10); `GET /api/v1/me` exercises auth, limits and the switch | done |
 | AC-210 | CSRF protection on dashboard actions | Cross-site POST rejected | done |
-| AC-211 | Register key format with GitHub secret scanning | Application submitted; outcome recorded (nice-to-have, not blocking) | todo |
+| AC-211 | Draft the GitHub secret scanning application | Draft in `docs/secret-scanning-application.md` (done). Sending needs a public alert endpoint: see AC-1109 and AC-1110 | done |
 | AC-212 | Environment (Upstash, kill switch), `api_keys.label` migration, shared constants | Env validated (required in production and staging); migration applied; live check still passes | done |
-| AC-213 | Terminal look and dashboard UI: window frame, control panel, key reveal panel, error blocks | Matches `docs/design/` mockups; component tests pass; reveal cannot be shown twice | todo |
+| AC-213 | Terminal look and dashboard UI: window frame, control panel, key reveal panel, error blocks | Matches `docs/design/` mockups; component tests pass; reveal cannot be shown twice | done |
 
 **Done when:** tests prove revoked, expired, wrong-scope and suspended-operator keys fail; rate limit returns 429 with retry-after; raw keys never appear in DB or logs.
 
@@ -263,6 +263,8 @@ Depends on: N10.
 | AC-1106 | `robots.txt` and sitemap decision | Decision recorded in the plan | todo |
 | AC-1107 | Invite-only onboarding | Invite list and access gate working | todo |
 | AC-1108 | Second admin (or documented moderation SLA) | Named person or written expectation | todo |
+| AC-1109 | Secret alert endpoint `POST /api/webhooks/github-secret-scanning` | Verifies GitHub's ECDSA signature on the raw body, revokes the key whose hash matches each reported token, notifies the operator, writes audit rows; tested with GitHub's documented sample payload | todo |
+| AC-1110 | Send the secret scanning application | Email sent after AC-1109 is live; checksum-in-key decision made first; outcome recorded | todo |
 
 **Done when:** 10 external operators have filed at least one case each. Start the 8-week review-point clock from launch day (plan Section 10).
 

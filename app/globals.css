@@ -67,12 +67,13 @@ a {
 /* Console layout */
 .shell {
   display: grid;
-  grid-template-columns: 190px 1fr;
+  grid-template-columns: 190px minmax(0, 1fr);
   min-height: 560px;
 }
 
 .main {
   padding: 22px 26px;
+  min-width: 0;
 }
 
 .side {
@@ -150,6 +151,8 @@ a {
   background: var(--panel);
   padding: 14px 16px;
   margin-bottom: 16px;
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .panel-title {
@@ -450,6 +453,7 @@ a.btn {
 
 .keybox {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 14px;
