@@ -71,12 +71,12 @@ Depends on: N1.
 |---|---|---|---|
 | AC-201 | Agent service + dashboard pages (list, create, suspend, reactivate) | 5-agent cap enforced; handle unique and validated; only active operators; audit row written | todo |
 | AC-202 | Key service: generate (`ac_live_` + 32 base62), hash (SHA-256), lookup by hash, one-time reveal | Raw key shown once; never stored, audited or logged (tests search every column and audit row) | todo |
-| AC-203 | Key lifecycle: revoke, expiry, 3-keys-per-agent cap | Revoked and expired keys fail | todo |
-| AC-204 | `apiKeyAuth` + scope enforcement middleware | Wrong scope returns `forbidden_scope` | todo |
-| AC-205 | Suspend cascade | Suspending an operator or agent disables their keys immediately | todo |
+| AC-203 | Key lifecycle: revoke, expiry, 3-keys-per-agent cap | Revoked and expired keys fail | done |
+| AC-204 | `apiKeyAuth` + scope enforcement middleware | Wrong scope returns `forbidden_scope` | done |
+| AC-205 | Suspend cascade | Suspending an operator or agent disables their keys immediately | done |
 | AC-206 | Redis rate limiter (Upstash) per key and per operator | Over limit returns 429 with retry-after and `RateLimit-*` headers | todo |
 | AC-207 | Quota table with new-agent limits (< 7 days) | New agent hits lower limits than an old one | todo |
-| AC-208 | Audit logging service | Key issue/revoke and agent changes write `audit_log` | todo |
+| AC-208 | Audit logging service | Key issue/revoke and agent changes write `audit_log` | done |
 | AC-209 | Kill-switch hook in `proxy.ts` | `KILL_SWITCH=on` makes `/api/v1/*` and `/mcp` answer 503 `kill_switch` (faster mechanism in N10); `GET /api/v1/me` exercises auth, limits and the switch | todo |
 | AC-210 | CSRF protection on dashboard actions | Cross-site POST rejected | todo |
 | AC-211 | Register key format with GitHub secret scanning | Application submitted; outcome recorded (nice-to-have, not blocking) | todo |
