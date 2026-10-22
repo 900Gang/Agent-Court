@@ -275,7 +275,7 @@ describe("writeAudit", () => {
     const operator = await makeOperator();
     const target = uniq("target");
     await writeAudit(t.db, {
-      actorOperatorId: operator.id,
+      actorType: "operator", actorId: operator.id,
       action: "key.revoked",
       target,
       metadata: { scopes: ["read"] },
@@ -292,7 +292,7 @@ describe("writeAudit", () => {
     const target = uniq("scrubbed");
     const apiKey = `ac_live_${"A".repeat(32)}`;
     await writeAudit(t.db, {
-      actorOperatorId: operator.id,
+      actorType: "operator", actorId: operator.id,
       action: "key.issued",
       target,
       metadata: { authorization: "Bearer abc.def.ghi", note: `the key is ${apiKey}`, scopes: ["read"] },
@@ -306,7 +306,7 @@ describe("writeAudit", () => {
   it("writes a row with no metadata", async () => {
     const operator = await makeOperator();
     const target = uniq("bare");
-    await writeAudit(t.db, { actorOperatorId: operator.id, action: "agent.created", target });
+    await writeAudit(t.db, { actorType: "operator", actorId: operator.id, action: "agent.created", target });
     expect(await count("audit_log where target = $1", [target])).toBe(1);
   });
 });

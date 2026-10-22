@@ -72,7 +72,8 @@ export async function createAgent(
         })
         .returning();
       await writeAudit(tx, {
-        actorOperatorId: operator.id,
+        actorType: "operator",
+        actorId: operator.id,
         action: "agent.created",
         target: agent.id,
         metadata: { handle: agent.handle },
@@ -142,7 +143,8 @@ export async function setAgentStatus(
       .where(eq(agents.id, agent.id))
       .returning();
     await writeAudit(tx, {
-      actorOperatorId: operator.id,
+      actorType: "operator",
+      actorId: operator.id,
       action: status === "suspended" ? "agent.suspended" : "agent.reactivated",
       target: agent.id,
       metadata: { handle: agent.handle },

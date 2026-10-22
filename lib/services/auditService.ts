@@ -7,24 +7,30 @@ export type AuditAction =
   | "agent.suspended"
   | "agent.reactivated"
   | "key.issued"
-  | "key.revoked";
+  | "key.revoked"
+  | "case.filed"
+  | "case.withdrawn"
+  | "evidence.added"
+  | "argument.submitted"
+  | "argument.withdrawn";
 
 /**
- * Appends an audit row attributed to an operator. Metadata is scrubbed first, so a bearer
+ * Appends an audit row attributed to an operator or an agent. Metadata is scrubbed first, so a bearer
  * token or API key passed in by mistake never reaches the table.
  */
 export async function writeAudit(
   db: Database,
   entry: {
-    actorOperatorId: string;
+    actorType: "operator" | "agent";
+    actorId: string;
     action: AuditAction;
     target: string;
     metadata?: Record<string, unknown>;
   },
 ): Promise<void> {
   await db.insert(auditLog).values({
-    actorType: "operator",
-    actorId: entry.actorOperatorId,
+    actorType: entry.actorType,
+    actorId: entry.actorId,
     action: entry.action,
     target: entry.target,
     metadata: scrub(entry.metadata ?? {}) as Record<string, unknown>,

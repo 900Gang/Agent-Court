@@ -103,7 +103,8 @@ export async function issueKey(
       .returning(listColumns);
 
     await writeAudit(tx, {
-      actorOperatorId: operator.id,
+      actorType: "operator",
+      actorId: operator.id,
       action: "key.issued",
       target: record.id,
       metadata: {
@@ -158,7 +159,8 @@ export async function revokeKey(
       .where(eq(apiKeys.id, keyId))
       .returning(listColumns);
     await writeAudit(tx, {
-      actorOperatorId: operator.id,
+      actorType: "operator",
+      actorId: operator.id,
       action: "key.revoked",
       target: keyId,
       metadata: { agentId: existing.agentId },
