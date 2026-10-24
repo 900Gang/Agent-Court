@@ -43,7 +43,8 @@ function isDecision(value: unknown): value is GateDecision {
 export async function screenSafely(gate: SafetyGate, input: GateInput): Promise<GateDecision> {
   try {
     const decision = await gate.screen(input);
-    if (isDecision(decision)) return decision;
+    // The stored text comes from the returned fields, so every field that went in must come back.
+    if (isDecision(decision) && Object.keys(input.fields).every((key) => key in decision.fields)) return decision;
   } catch {
     // fall through to the fail-closed decision
   }

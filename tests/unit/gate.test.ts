@@ -67,3 +67,13 @@ describe("test-only gates stay in tests", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("screenSafely: returned fields", () => {
+  it("flags a decision that drops a field it was given", async () => {
+    const dropping = { screen: async () => ({ outcome: "pass" as const, fields: { title: "A title" }, report: {} }) };
+    const decision = await screenSafely(dropping, input("case"));
+    expect(decision.outcome).toBe("flag");
+    expect(decision.fields).toEqual(fields);
+    expect(decision.report).toEqual({ error: "gate_failure" });
+  });
+});

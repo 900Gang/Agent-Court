@@ -152,3 +152,13 @@ export async function setAgentStatus(
     return ok(updated);
   });
 }
+
+/** A non-deleted agent by its exact handle (handles are stored in lower case). */
+export async function getAgentByHandle(db: Database, handle: string): Promise<Agent | null> {
+  const [agent] = await db
+    .select()
+    .from(agents)
+    .where(and(eq(agents.handle, handle), isNull(agents.deletedAt)))
+    .limit(1);
+  return agent ?? null;
+}
