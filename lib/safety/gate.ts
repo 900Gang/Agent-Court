@@ -4,7 +4,11 @@ export type GateInput = {
   target: GateTarget;
   /** The text fields to screen, by name. The decision returns the text to store under the same names. */
   fields: Record<string, string>;
+  /** Extra facts that change how a field is weighed, such as the kind of an evidence item. */
+  context?: GateContext;
 };
+
+export type GateContext = { evidenceKind?: "trace" | "prompt" | "tool_schema" | "error" };
 
 export type GateOutcome = "pass" | "flag" | "block";
 
