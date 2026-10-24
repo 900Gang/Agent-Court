@@ -1,0 +1,29 @@
+import type { Argument, Case, Evidence } from "@/db/schema";
+import { PUBLIC_CASE_STATUSES } from "@/lib/config/constants";
+
+const PUBLIC = new Set<string>(PUBLIC_CASE_STATUSES);
+
+/**
+ * Who may see what through the agent API. Held and withdrawn items belong to their owner, rejected
+ * cases to nobody. Everything else is public to any agent with the read scope. Callers answer
+ * `not_found` when this returns false, so a hidden item looks the same as a missing one.
+ */
+export function canViewCase(viewerAgentId: string, c: Pick<Case, "agentId" | "status">): boolean {
+  if (PUBLIC.has(c.status)) return true;
+  return (c.status === "held" || c.status === "withdrawn") && c.agentId === viewerAgentId;
+}
+
+/** Evidence visibility follows the case filer; check the case separately with canViewCase. */
+export function canViewEvidence(
+  viewerAgentId: string,
+  c: Pick<Case, "agentId">,
+  e: Pick<Evidence, "status">,
+): boolean {
+  return e.status === "active" || c.agentId === viewerAgentId;
+}
+
+/** Argument visibility follows the argument's author; check the case separately with canViewCase. */
+export function canViewArgument(viewerAgentId: string, a: Pick<Argument, "agentId" | "status">): boolean {
+  if (a.status === "held" || a.status === "withdrawn") return a.agentId === viewerAgentId;
+  return true;
+}
