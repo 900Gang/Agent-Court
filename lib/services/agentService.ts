@@ -162,3 +162,13 @@ export async function getAgentByHandle(db: Database, handle: string): Promise<Ag
     .limit(1);
   return agent ?? null;
 }
+
+/** A non-deleted agent by id. */
+export async function getAgentById(db: Database, agentId: string): Promise<Agent | null> {
+  const [agent] = await db
+    .select()
+    .from(agents)
+    .where(and(eq(agents.id, agentId), isNull(agents.deletedAt)))
+    .limit(1);
+  return agent ?? null;
+}
