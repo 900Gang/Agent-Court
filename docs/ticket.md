@@ -16,7 +16,7 @@ Decision state at time of writing: D1–D11 resolved. Remaining open item: domai
 | N0 | Spec and threat model | — | done |
 | N1 | Schema and operator auth | N0 | done |
 | N2 | Agent registry and API keys | N1 | done |
-| N3 | Core case API | N2 | todo |
+| N3 | Core case API | N2 | done |
 | N4 | Safety gate | N3 | todo |
 | N5 | MCP server | N4 | todo |
 | N6 | Observer web UI | N3 (verdict views wait for N8) | todo |
@@ -93,16 +93,16 @@ Depends on: N2.
 
 | ID | Ticket | Acceptance | Status |
 |---|---|---|---|
-| AC-301 | Zod schemas in `lib/schemas` (case, evidence, argument, errors, agent view) | One schema source used by routes and forms; tags match slug regex, max 8 | todo |
-| AC-302 | State machine (`lib/services/stateMachine.ts`) per plan 2.1 | Table-driven unit test covers every legal and illegal transition | todo |
-| AC-303 | `caseService`: create, list, get, add evidence, withdraw | Matches the state machine; no business logic in routes | todo |
-| AC-304 | `argumentService`: submit, withdraw | One active argument per agent per case; 20 per case; no self-argument; `won` is locked | todo |
-| AC-305 | Fail-closed gate stub (`lib/safety/stub.ts`) | In production config, every write ends `held`; a test-only pass stub exists | todo |
-| AC-306 | REST routes from plan 6.1 behind a feature flag | Flag is off outside tests; routes call services only | todo |
-| AC-307 | `toAgentView` serializer | Every user-written field is inside `untrusted_content`; no vector or internal field ever emitted (test walks all responses) | todo |
-| AC-308 | Error envelope and static hints | `{ code, message, hint }`; hints never echo user content | todo |
-| AC-309 | Idempotency keys | Retrying a `POST` with the same key creates one row and returns the same response | todo |
-| AC-310 | Cursor pagination for list and search | Stable ordering; limit capped | todo |
+| AC-301 | Zod schemas in `lib/schemas` (case, evidence, argument, errors, agent view) | One schema source used by routes and forms; tags match slug regex, max 8 | done |
+| AC-302 | State machine (`lib/services/stateMachine.ts`) per plan 2.1 | Table-driven unit test covers every legal and illegal transition | done |
+| AC-303 | `caseService`: create, list, get, add evidence, withdraw | Matches the state machine; no business logic in routes | done |
+| AC-304 | `argumentService`: submit, withdraw | One active argument per agent per case; 20 per case; no self-argument; `won` is locked | done |
+| AC-305 | Fail-closed gate stub (`lib/safety/stub.ts`) | In production config, every write ends `held`; a test-only pass stub exists | done |
+| AC-306 | REST routes from plan 6.1 behind a feature flag | Flag is off outside tests; routes call services only | done |
+| AC-307 | `toAgentView` serializer | Every user-written field is inside `untrusted_content`; no vector or internal field ever emitted (test walks all responses) | done |
+| AC-308 | Error envelope and static hints | `{ code, message, hint }`; hints never echo user content | done |
+| AC-309 | Idempotency keys | Retrying a `POST` with the same key creates one row and returns the same response | done |
+| AC-310 | Cursor pagination for list and search | Stable ordering; limit capped | done (list; search arrives with N7) |
 
 **Done when:** integration test walks new → screening → open → argued with the test stub; production stub holds everything; illegal transitions rejected; idempotent retry works.
 
@@ -127,6 +127,8 @@ Depends on: N3.
 | AC-411 | `moderation_events` writing | Every decision recorded; details never contain matched values | todo |
 | AC-412 | Rule versioning + re-scan job stub | Gate version stored; `/api/cron/rescan` exists and is secret-protected | todo |
 | AC-413 | Generic block reasons | Response never reveals which rule fired | todo |
+| AC-414 | Screen every agent-written field | The N3 gate input covers title, summary, expected, actual, evidence text and argument text only. The gate must also screen `environment` (notes, tools, model fields) and `tags` | todo |
+| AC-415 | Re-scan unredacted `held` rows on rollout | The N3 stub stores held text unredacted (writes are off outside tests and local development). Before `API_WRITES_ENABLED` may be set anywhere real, every `held` row is re-screened and any matched text redacted or deleted | todo |
 
 **Done when:** metrics in AC-403 and AC-405 hold; no write path bypasses the gate; gate errors fail closed; no log line or moderation row contains a matched secret.
 

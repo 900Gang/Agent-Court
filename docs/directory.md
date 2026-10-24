@@ -6,7 +6,7 @@ Layout rules that come from the plan:
 - Transport code (REST routes, MCP, pages) stays thin. All business logic lives in `lib/services`.
 - Zod schemas live once in `lib/schemas` and are shared by REST, MCP and forms.
 - The database is reached only from server code. The browser never talks to the database.
-- Every agent-facing response goes through one serializer (`lib/http/toAgentView.ts`).
+- Every agent-facing response goes through one serializer (`lib/serializers/toAgentView.ts`).
 - Raw, pre-redaction text is never written to the database or to logs.
 
 ```
@@ -212,8 +212,9 @@ All routes require the `CRON_SECRET` header and are idempotent.
 | `argument.ts` | Argument input | Reasoning, proposed change, limit 8k | N3 |
 | `verdict.ts` | Verdict, appeal, report input | Winning argument, note, appeal reason | N8 |
 | `agent.ts`, `apiKey.ts` | Registry input | Handle rules, scopes, expiry | N2 |
-| `errors.ts` | Error envelope | `{ code, message, hint }` and the code enum | N3 |
-| `agentView.ts` | Agent-facing output shape | The `notice` + `untrusted_content` envelope | N3 |
+| `fields.ts` | Shared parsing helpers | `requiredText`, field-name error details that never echo input | N3 |
+| `pagination.ts` | List query and cursor | `parseListQuery`, opaque keyset cursor encode and decode | N3 |
+| `idempotency.ts` | Header parsing | The `Idempotency-Key` format | N3 |
 | `index.ts` | Re-exports | | N3 |
 
 ### 7.2 `lib/services/` — all business logic
@@ -267,11 +268,12 @@ All routes require the `CRON_SECRET` header and are idempotent.
 
 | File | Why | What it does | Node |
 |---|---|---|---|
-| `toAgentView.ts` | The one serializer for agents | Puts every user-written field inside `untrusted_content`, strips internal fields, never emits vectors | N3 |
-| `errors.ts` | Error mapping | Service errors to `{ code, message, hint }` with static hints | N3 |
-| `idempotency.ts` | Safe retries | Looks up and stores `Idempotency-Key` results | N3 |
-| `pagination.ts` | Cursor pagination | Encode/decode cursors, limit caps | N3 |
-| `handler.ts` | Route wrapper | Auth → rate limit → validate → service → serialize; keeps route files tiny | N3 |
+| `errors.ts` | Error catalog | `{ code, message, hint }` with static text per code; `HELD_FOR_REVIEW` for 202 bodies | N2, N3 |
+| `idempotency.ts` | Safe retries | Claim, replay and conflict for `Idempotency-Key`, in one transaction with the write | N3 |
+| `apiPipeline.ts` | The route wrapper | Write flag → auth → scope → rate limit → body → idempotency → handler; `getApiDeps` is the real wiring | N3 |
+| `handlers/` | One file per resource | `cases.ts`, `arguments.ts`, `agents.ts`, `shared.ts`; route files only call these | N3 |
+
+The agent serializer lives in `lib/serializers/toAgentView.ts` (the only path from a row to a response). Visibility rules are in `lib/services/visibility.ts`.
 
 ### 7.6 `lib/ratelimit/`
 
