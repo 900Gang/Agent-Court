@@ -25,13 +25,6 @@ export function hashRequest(method: string, path: string, body: unknown): string
   return sha256(`${method}\n${path}\n${canonical(body)}`);
 }
 
-/** Thrown inside the transaction to roll it back and hand the refusal to the caller. */
-class Abort extends Error {
-  constructor(readonly response: Response) {
-    super("idempotent request aborted");
-  }
-}
-
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 
 function replayOrConflict(existing: IdempotencyKey, requestHash: string): Response {
@@ -59,8 +52,10 @@ async function find(tx: Database, keyHash: string, agentId: string): Promise<Ide
 
 /**
  * Runs `work` once per Idempotency-Key. The claim, the write and the stored response share one transaction,
- * so a crash cannot leave a claim without a response. Only 2xx responses are kept: any other response, or an
- * exception, rolls the whole transaction back, so the key can be used again and nothing half-written survives.
+ * so a crash cannot leave a claim without a response. Only 2xx responses are kept. A non-2xx response drops the
+ * claim, so the key can be used again, but commits the rest: services return their failures before they write,
+ * and the one write that must survive a refusal is the moderation event for blocked content. An exception
+ * rolls the whole transaction back.
  * A concurrent request with the same key waits on the claim insert, then replays the winner's response.
  */
 export async function runIdempotent(
@@ -69,8 +64,7 @@ export async function runIdempotent(
   work: (tx: Database) => Promise<Response>,
 ): Promise<Response> {
   const keyHash = input.key === null ? null : sha256(input.key);
-  try {
-    return await db.transaction(async (tx): Promise<Response> => {
+  return db.transaction(async (tx): Promise<Response> => {
       if (keyHash !== null) {
         let existing = await find(tx, keyHash, input.agentId);
         if (existing && existing.createdAt.getTime() < input.now.getTime() - IDEMPOTENCY_TTL_HOURS * 3_600_000) {
@@ -95,8 +89,13 @@ export async function runIdempotent(
       }
 
       const response = await work(tx);
-      if (response.status < 200 || response.status >= 300) throw new Abort(response);
       if (keyHash === null) return response;
+      if (response.status < 200 || response.status >= 300) {
+        await tx
+          .delete(idempotencyKeys)
+          .where(and(eq(idempotencyKeys.keyHash, keyHash), eq(idempotencyKeys.agentId, input.agentId)));
+        return response;
+      }
 
       const text = await response.text();
       await tx
@@ -104,9 +103,5 @@ export async function runIdempotent(
         .set({ responseRef: JSON.stringify({ status: response.status, body: text }) })
         .where(and(eq(idempotencyKeys.keyHash, keyHash), eq(idempotencyKeys.agentId, input.agentId)));
       return new Response(text, { status: response.status, headers: response.headers });
-    });
-  } catch (error) {
-    if (error instanceof Abort) return error.response;
-    throw error;
-  }
+  });
 }

@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "@/db/types";
 import { hashRequest, runIdempotent } from "@/lib/http/idempotency";
 import { fileCase } from "@/lib/services/caseService";
+import { recordModeration } from "@/lib/services/moderationService";
 import { passGate } from "../helpers/gates";
 import { createFixtures, type TestActor } from "../helpers/fixtures";
 import { createTestDb, type TestDb } from "../helpers/db";
@@ -146,15 +147,17 @@ describe("runIdempotent: failures leave nothing behind", () => {
     expect(state.calls).toBe(1);
   });
 
-  it.each([["a key", "rollback-key-01"], ["no key", null]])("rolls back writes made before a non-2xx response with %s", async (_label, key) => {
+  it.each([["a key", "refusal-key-001"], ["no key", null]])("keeps a moderation event written before a non-2xx response, with %s", async (_label, key) => {
     const { actor } = await f.makeAgent();
-    const writeThenRefuse = async (tx: Database) => {
-      f.unwrap(await fileCase(tx, passGate, actor, body));
-      return new Response("{}", { status: 409, headers: jsonHeaders });
+    const before = await f.count("moderation_events where target_type = 'case' and target_id is null and result = 'block'");
+    const blockThenRefuse = async (tx: Database) => {
+      await recordModeration(tx, { targetType: "case", targetId: null, check: "injection", result: "block" });
+      return new Response("{}", { status: 422, headers: jsonHeaders });
     };
-    const response = await runIdempotent(t.db, input(actor.agentId, key), writeThenRefuse);
-    expect(response.status).toBe(409);
-    expect(await caseCount(actor.agentId)).toBe(0);
+    const response = await runIdempotent(t.db, input(actor.agentId, key), blockThenRefuse);
+    expect(response.status).toBe(422);
+    expect(await f.count("moderation_events where target_type = 'case' and target_id is null and result = 'block'")).toBe(before + 1);
+    expect(await f.count("idempotency_keys where agent_id = $1", [actor.agentId])).toBe(0);
   });
 
   it.each([["a key", "throw-key-00001"], ["no key", null]])("rolls back and rethrows when the work throws with %s", async (_label, key) => {

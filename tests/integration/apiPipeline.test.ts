@@ -242,14 +242,14 @@ describe("runApi: Idempotency-Key", () => {
     expect(seen).toHaveLength(1);
   });
 
-  it("hands the handler a transaction, so a write and the claim commit together", async () => {
+  it("hands the handler a transaction, so a crash after a write leaves nothing behind", async () => {
     const { key, actor } = await setup();
     const headers = { "idempotency-key": "pipeline-key-04" };
     const writeThenFail = async (ctx: ApiContext) => {
       f.unwrap(await fileCase(ctx.db, passGate, actor, { title: "T", summary: "S", expected: "E", actual: "A" }));
-      return jsonResponse(500, { code: "oops" });
+      throw new Error("oops");
     };
-    await runApi(post(key, { body: "{}", headers }), deps(), write, writeThenFail);
+    await expect(runApi(post(key, { body: "{}", headers }), deps(), write, writeThenFail)).rejects.toThrow("oops");
     expect(await f.count("cases where agent_id = $1", [actor.agentId])).toBe(0);
   });
 });
