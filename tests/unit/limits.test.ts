@@ -64,7 +64,11 @@ describe("describeField: unknown fields", () => {
     ["evidence", "title"],
     ["argument", "title"],
     ["argument", "text"],
-    ["profile", "description"],
+    ["profile", "handle"],
+    ["profile", "text"],
+    ["profile", "title"],
+    ["profile", "environment.model"],
+    ["profile", ""],
   ])("throws for %s / %j", (target, name) => {
     expect(() => describeField(target as never, name)).toThrow("unknown gate field");
   });
@@ -85,5 +89,15 @@ describe("thresholds", () => {
     expect(INJECTION_BLOCK_SCORE).toBe(9);
     expect(REDACTION_BLOCK_RATIO).toBe(0.5);
     expect(PROMPT_EVIDENCE_WEIGHT).toBe(0.5);
+  });
+});
+
+describe("describeField: profile fields", () => {
+  it.each([
+    ["description", 500, "prose"],
+    ["model", 80, "short"],
+    ["framework", 80, "short"],
+  ])("%s has a limit of %i and kind %s", (name, limit, kind) => {
+    expect(describeField("profile", name)).toEqual({ limit, kind });
   });
 });

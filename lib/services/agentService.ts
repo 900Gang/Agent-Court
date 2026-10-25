@@ -2,7 +2,9 @@ import { and, count, desc, eq, isNull } from "drizzle-orm";
 import { agents, operators, type Agent, type Operator } from "@/db/schema";
 import type { Database } from "@/db/types";
 import { MAX_AGENTS_PER_OPERATOR } from "@/lib/config/constants";
-import { parseAgentInput } from "@/lib/schemas/agent";
+import { createGate } from "@/lib/safety/engine";
+import { screenSafely, type SafetyGate } from "@/lib/safety/gate";
+import { parseAgentInput, type AgentInput } from "@/lib/schemas/agent";
 import { writeAudit } from "./auditService";
 import { fail, ok, type ServiceResult } from "./result";
 
@@ -15,6 +17,28 @@ type CreateAgentResult = ServiceResult<
 
 type SetStatusResult = ServiceResult<Agent, "operator_not_active" | "agent_not_found">;
 
+const PROFILE_REFUSED = "was not accepted: remove secrets, personal data and instructions";
+const PROFILE_FIELDS = ["description", "model", "framework"] as const;
+
+type Profile = Pick<AgentInput, (typeof PROFILE_FIELDS)[number]>;
+
+/**
+ * Screens the free text of a profile, which other agents read. Each field goes through the gate on its own, so a
+ * refusal names exactly the fields that failed. The message is fixed and never quotes the content.
+ */
+async function screenProfile(gate: SafetyGate, input: Profile): Promise<ServiceResult<Profile, "invalid">> {
+  const profile: Profile = { description: input.description, model: input.model, framework: input.framework };
+  const refused: Record<string, string> = {};
+  for (const name of PROFILE_FIELDS) {
+    const text = input[name];
+    if (text === null) continue;
+    const decision = await screenSafely(gate, { target: "profile", fields: { [name]: text } });
+    if (decision.outcome === "pass") profile[name] = decision.fields[name];
+    else refused[name] = PROFILE_REFUSED;
+  }
+  return Object.keys(refused).length > 0 ? fail("invalid", refused) : ok(profile);
+}
+
 // Drizzle wraps driver errors, so the SQLSTATE code may be on `cause`.
 function errorCode(error: unknown): string | undefined {
   const direct = (error as { code?: unknown }).code;
@@ -26,15 +50,21 @@ function errorCode(error: unknown): string | undefined {
 /**
  * Registers an agent. The operator's current status comes from the database, not from the
  * object passed in, and the operator row is locked so simultaneous requests cannot exceed the cap.
+ * The profile text is screened first, outside the transaction, so a slow gate holds no locks.
  */
 export async function createAgent(
   db: Database,
   operator: Operator,
   raw: unknown,
+  gate: SafetyGate = createGate(),
 ): Promise<CreateAgentResult> {
   const parsed = parseAgentInput(raw);
   if (!parsed.ok) return parsed;
   const input = parsed.value;
+
+  const screened = await screenProfile(gate, input);
+  if (!screened.ok) return screened;
+  const profile = screened.value;
 
   try {
     return await db.transaction(async (tx): Promise<CreateAgentResult> => {
@@ -66,9 +96,9 @@ export async function createAgent(
         .values({
           operatorId: operator.id,
           handle: input.handle,
-          model: input.model,
-          framework: input.framework,
-          description: input.description,
+          model: profile.model,
+          framework: profile.framework,
+          description: profile.description,
         })
         .returning();
       await writeAudit(tx, {

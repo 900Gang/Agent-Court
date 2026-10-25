@@ -2,6 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { operators, type Operator } from "@/db/schema";
 import { createAgent, getOwnedAgent, listAgents, setAgentStatus } from "@/lib/services/agentService";
 import { writeAudit } from "@/lib/services/auditService";
+import { createGate } from "@/lib/safety/engine";
+import type { GateInput, SafetyGate } from "@/lib/safety/gate";
+import { blockGate, passGate, throwingGate } from "../helpers/gates";
 import { createTestDb, type TestDb } from "../helpers/db";
 
 let t: TestDb;
@@ -308,5 +311,134 @@ describe("writeAudit", () => {
     const target = uniq("bare");
     await writeAudit(t.db, { actorType: "operator", actorId: operator.id, action: "agent.created", target });
     expect(await count("audit_log where target = $1", [target])).toBe(1);
+  });
+});
+
+describe("createAgent: profile screening", () => {
+  const awsKey = ["AKIA", "IOSFODNN7EXAMPLE"].join("");
+  const REFUSED = "was not accepted: remove secrets, personal data and instructions";
+
+  /** Flags a field holding the word flagme; passes everything else unchanged. */
+  const markerGate: SafetyGate = {
+    screen: async (input) => ({
+      outcome: Object.values(input.fields).some((value) => value.includes("flagme")) ? "flag" : "pass",
+      fields: { ...input.fields },
+      report: {},
+    }),
+  };
+
+  function spyGate(): { gate: SafetyGate; calls: GateInput[] } {
+    const calls: GateInput[] = [];
+    return {
+      calls,
+      gate: {
+        screen: async (input) => {
+          calls.push(input);
+          return passGate.screen(input);
+        },
+      },
+    };
+  }
+
+  it("screens the description, model and framework as profile text, one field at a time, and never the handle", async () => {
+    const operator = await makeOperator();
+    const { gate, calls } = spyGate();
+    unwrap(
+      await createAgent(
+        t.db,
+        operator,
+        { handle: uniq("screened"), model: "model-a", framework: "framework-b", description: "Files cases." },
+        gate,
+      ),
+    );
+    expect(calls.map((call) => call.target)).toEqual(["profile", "profile", "profile"]);
+    expect(calls.map((call) => Object.keys(call.fields)).flat().sort()).toEqual(["description", "framework", "model"]);
+  });
+
+  it("does not call the gate when there is no profile text", async () => {
+    const operator = await makeOperator();
+    const { gate, calls } = spyGate();
+    unwrap(await createAgent(t.db, operator, { handle: uniq("bare") }, gate));
+    expect(calls).toHaveLength(0);
+  });
+
+  it("stores the text the gate returns, so a secret in the description is redacted", async () => {
+    const operator = await makeOperator();
+    const agent = unwrap(
+      await createAgent(
+        t.db,
+        operator,
+        { handle: uniq("redacted"), description: `Files cases for the team; once pasted ${awsKey} into a chat by mistake.` },
+        createGate(),
+      ),
+    );
+    expect(agent.description).toBe("Files cases for the team; once pasted [REDACTED:aws_access_key] into a chat by mistake.");
+    expect(JSON.stringify(agent)).not.toContain(awsKey);
+  });
+
+  it("uses the real gate when none is passed", async () => {
+    const operator = await makeOperator();
+    const agent = unwrap(
+      await createAgent(t.db, operator, {
+        handle: uniq("default"),
+        description: `Files cases for the team; once pasted ${awsKey} into a chat by mistake.`,
+      }),
+    );
+    expect(agent.description).toContain("[REDACTED:aws_access_key]");
+    expect(agent.description).not.toContain(awsKey);
+  });
+
+  it("refuses a flagged field with a fixed message, creates no agent and writes no audit row", async () => {
+    const operator = await makeOperator();
+    const result = await createAgent(
+      t.db,
+      operator,
+      { handle: uniq("flagged"), model: "model-a", description: "flagme" },
+      markerGate,
+    );
+    expect(result).toMatchObject({ ok: false, error: "invalid", detail: { description: REFUSED } });
+    expect(!result.ok && Object.keys(result.detail ?? {})).toEqual(["description"]);
+    expect(JSON.stringify(result)).not.toContain("flagme");
+    expect(await agentsOf(operator.id)).toBe(0);
+    expect(await count("audit_log where actor_id = $1", [operator.id])).toBe(0);
+  });
+
+  it("lists every refused field, and only those", async () => {
+    const operator = await makeOperator();
+    const result = await createAgent(
+      t.db,
+      operator,
+      { handle: uniq("many"), model: "flagme", framework: "framework-b", description: "flagme" },
+      markerGate,
+    );
+    expect(!result.ok && result.detail).toEqual({ model: REFUSED, description: REFUSED });
+  });
+
+  it("refuses every field when the gate blocks", async () => {
+    const operator = await makeOperator();
+    const result = await createAgent(
+      t.db,
+      operator,
+      { handle: uniq("blocked"), model: "model-a", framework: "framework-b", description: "Files cases." },
+      blockGate,
+    );
+    expect(!result.ok && result.detail).toEqual({ model: REFUSED, framework: REFUSED, description: REFUSED });
+    expect(await agentsOf(operator.id)).toBe(0);
+  });
+
+  it("refuses the profile when the gate throws", async () => {
+    const operator = await makeOperator();
+    const result = await createAgent(t.db, operator, { handle: uniq("exploded"), description: "Files cases." }, throwingGate);
+    expect(result).toMatchObject({ ok: false, error: "invalid", detail: { description: REFUSED } });
+    expect(JSON.stringify(result)).not.toContain("sk-live");
+    expect(await agentsOf(operator.id)).toBe(0);
+  });
+
+  it("still reports invalid input before it screens anything", async () => {
+    const operator = await makeOperator();
+    const { gate, calls } = spyGate();
+    const result = await createAgent(t.db, operator, { handle: "admin", description: "Files cases." }, gate);
+    expect(result).toMatchObject({ ok: false, error: "invalid" });
+    expect(calls).toHaveLength(0);
   });
 });

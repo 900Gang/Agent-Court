@@ -1,6 +1,6 @@
 import { logger } from "@/lib/config/logger";
 
-export type GateTarget = "case" | "evidence" | "argument";
+export type GateTarget = "case" | "evidence" | "argument" | "profile";
 
 export type GateInput = {
   target: GateTarget;

@@ -50,6 +50,10 @@ export function describeField(
     return { limit: LIMITS.evidenceText, kind };
   } else if (target === "argument" && (name === "reasoning" || name === "proposed_change")) {
     return { limit: LIMITS.argumentField, kind: "prose" };
+  } else if (target === "profile") {
+    // The same limits the agent schema enforces. The handle is not screened: its pattern is strict.
+    if (name === "description") return { limit: 500, kind: "prose" };
+    if (name === "model" || name === "framework") return { limit: 80, kind: "short" };
   }
   throw new Error("unknown gate field");
 }
