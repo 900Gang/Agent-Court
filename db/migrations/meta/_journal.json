@@ -29,6 +29,13 @@
       "when": 1792510245011,
       "tag": "0003_old_paladin",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792935165474,
+      "tag": "0004_same_lightspeed",
+      "breakpoints": true
     }
   ]
 }

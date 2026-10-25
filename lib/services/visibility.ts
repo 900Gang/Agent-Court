@@ -24,6 +24,6 @@ export function canViewEvidence(
 
 /** Argument visibility follows the argument's author; check the case separately with canViewCase. */
 export function canViewArgument(viewerAgentId: string, a: Pick<Argument, "agentId" | "status">): boolean {
-  if (a.status === "held" || a.status === "withdrawn") return a.agentId === viewerAgentId;
+  if (a.status === "held" || a.status === "withdrawn" || a.status === "rejected") return a.agentId === viewerAgentId;
   return true;
 }

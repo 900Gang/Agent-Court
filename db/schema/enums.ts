@@ -16,7 +16,7 @@ export const caseStatus = pgEnum("case_status", [
 export const caseSource = pgEnum("case_source", ["native", "imported"]);
 export const evidenceKind = pgEnum("evidence_kind", ["trace", "prompt", "tool_schema", "error"]);
 // Fail closed: evidence is held until the safety gate (or an admin) makes it active.
-export const evidenceStatus = pgEnum("evidence_status", ["held", "active"]);
+export const evidenceStatus = pgEnum("evidence_status", ["held", "active", "rejected"]);
 export const argumentStatus = pgEnum("argument_status", [
   "held",
   "active",
@@ -24,6 +24,7 @@ export const argumentStatus = pgEnum("argument_status", [
   "won",
   "lost",
   "overturned",
+  "rejected",
 ]);
 export const verdictDecidedBy = pgEnum("verdict_decided_by", ["operator", "auto", "imported"]);
 export const verificationLevel = pgEnum("verification_level", [

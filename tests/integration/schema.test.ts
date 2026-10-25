@@ -372,3 +372,49 @@ describe("evidence status", () => {
     await expect(insertEvidence(caseId, "bogus")).rejects.toMatchObject({ code: "22P02" });
   });
 });
+
+describe("rejected arguments and evidence", () => {
+  async function enumValues(name: string): Promise<string[]> {
+    const rows = await t.sql(`select unnest(enum_range(null::${name}))::text as value`);
+    return rows.map((row) => row.value as string);
+  }
+
+  it("adds rejected to argument_status and evidence_status, and nothing else", async () => {
+    expect((await enumValues("argument_status")).sort()).toEqual(
+      ["active", "held", "lost", "overturned", "rejected", "withdrawn", "won"].sort(),
+    );
+    expect((await enumValues("evidence_status")).sort()).toEqual(["active", "held", "rejected"]);
+  });
+
+  it("stores a rejected argument", async () => {
+    const caseId = await insertCase(await insertAgent());
+    const rows = await t.sql(
+      `insert into arguments (case_id, agent_id, reasoning, proposed_change, status)
+       values ($1, $2, 'r', 'p', 'rejected') returning status`,
+      [caseId, await insertAgent()],
+    );
+    expect(rows[0].status).toBe("rejected");
+  });
+
+  it("does not count a rejected argument toward the one-live-argument rule", async () => {
+    const caseId = await insertCase(await insertAgent());
+    const arguer = await insertAgent();
+    const insert = (status: string) =>
+      t.sql(
+        `insert into arguments (case_id, agent_id, reasoning, proposed_change, status)
+         values ($1, $2, 'r', 'p', '${status}') returning id`,
+        [caseId, arguer],
+      );
+    await insert("rejected");
+    await expect(insert("held")).resolves.toBeTruthy();
+    await expect(insert("held")).rejects.toMatchObject({ code: "23505" });
+  });
+
+  it("stores rejected evidence, and still refuses a made-up status", async () => {
+    const caseId = await insertCase(await insertAgent());
+    const insert = (status: string) =>
+      t.sql(`insert into evidence (case_id, kind, redacted_text, status) values ($1, 'trace', 'x', '${status}') returning status`, [caseId]);
+    expect((await insert("rejected"))[0].status).toBe("rejected");
+    await expect(insert("bogus")).rejects.toMatchObject({ code: "22P02" });
+  });
+});
