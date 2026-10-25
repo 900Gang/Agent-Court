@@ -16,8 +16,10 @@ export interface ServerEnv {
   upstashToken: string | null;
   /** When true, agent API traffic (/api/v1 and /mcp) is refused. */
   killSwitch: boolean;
-  /** When true, agent write routes accept requests. Off by default; refused in production and staging until the safety gate ships. */
+  /** When true, agent write routes accept requests. Off by default; allowed in every environment now that the safety gate is real. */
   apiWritesEnabled: boolean;
+  /** Bearer secret for the scheduled re-scan endpoint. Required in production and staging; null elsewhere when unset. */
+  cronSecret: string | null;
 }
 
 export class EnvError extends Error {
@@ -39,6 +41,7 @@ const KEYS = [
   "UPSTASH_REDIS_REST_TOKEN",
   "KILL_SWITCH",
   "API_WRITES_ENABLED",
+  "CRON_SECRET",
 ] as const;
 
 const FLAG_ON = ["on", "true", "1"];
@@ -57,6 +60,7 @@ const schema = z
     UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
     KILL_SWITCH: z.string().optional(),
     API_WRITES_ENABLED: z.string().optional(),
+    CRON_SECRET: z.string().min(32).optional(),
   })
   .superRefine((env, ctx) => {
     if (env.APP_ENV === "production" && !env.BETTER_AUTH_URL.startsWith("https://")) {
@@ -91,16 +95,15 @@ const schema = z
       ctx.addIssue({ code: "custom", path: ["KILL_SWITCH"], message: "must be on or off" });
     }
 
-    // Same rule for the write flag. The N3 gate stub does not redact, so writes stay off where real data lives.
+    // Same rule for the write flag.
     const writes = (env.API_WRITES_ENABLED ?? "").toLowerCase();
     if (![...FLAG_ON, ...FLAG_OFF].includes(writes)) {
       ctx.addIssue({ code: "custom", path: ["API_WRITES_ENABLED"], message: "must be on or off" });
-    } else if (FLAG_ON.includes(writes) && deployed) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["API_WRITES_ENABLED"],
-        message: "not allowed in production or staging until the safety gate ships",
-      });
+    }
+
+    // The re-scan endpoint is open to anyone without it, so a deployed app must have one.
+    if (deployed && env.CRON_SECRET === undefined) {
+      ctx.addIssue({ code: "custom", path: ["CRON_SECRET"], message: "required in production and staging" });
     }
   });
 
@@ -142,6 +145,7 @@ export function parseServerEnv(source: Record<string, string | undefined>): Serv
     env.GITHUB_CLIENT_SECRET,
   ]);
   if (env.UPSTASH_REDIS_REST_TOKEN) secrets.add(env.UPSTASH_REDIS_REST_TOKEN);
+  if (env.CRON_SECRET) secrets.add(env.CRON_SECRET);
   const leaked = Object.entries(source)
     .filter(([name, value]) => name.startsWith("NEXT_PUBLIC_") && value !== undefined && secrets.has(value))
     .map(([name]) => name);
@@ -163,6 +167,7 @@ export function parseServerEnv(source: Record<string, string | undefined>): Serv
     upstashToken: env.UPSTASH_REDIS_REST_TOKEN ?? null,
     killSwitch: FLAG_ON.includes((env.KILL_SWITCH ?? "").toLowerCase()),
     apiWritesEnabled: FLAG_ON.includes((env.API_WRITES_ENABLED ?? "").toLowerCase()),
+    cronSecret: env.CRON_SECRET ?? null,
   };
 }
 

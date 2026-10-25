@@ -157,3 +157,18 @@ describe("Upstash token", () => {
     expect(result.message).not.toContain(token);
   });
 });
+
+describe("Cron secret", () => {
+  const secret = "c0ffee-cron-secret-value-0123456789ab";
+
+  it("is collected as a secret", () => {
+    expect(collectSecrets({ ...env, CRON_SECRET: secret })).toContain(secret);
+  });
+
+  it("is caught when it appears in the client bundle", async () => {
+    await write("chunks/app.js", `fetch("/api/cron/rescan", { headers: { authorization: "Bearer ${secret}" } })`);
+    const result = await checkBundle(dir, { ...env, CRON_SECRET: secret });
+    expect(result.ok).toBe(false);
+    expect(result.message).not.toContain(secret);
+  });
+});

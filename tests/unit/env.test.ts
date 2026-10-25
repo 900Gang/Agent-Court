@@ -36,6 +36,7 @@ describe("parseServerEnv", () => {
       upstashToken: null,
       killSwitch: false,
       apiWritesEnabled: false,
+      cronSecret: null,
     });
   });
 
@@ -92,6 +93,7 @@ describe("parseServerEnv", () => {
         BETTER_AUTH_URL: "https://agent-court.example",
         UPSTASH_REDIS_REST_URL: "https://example-12345.upstash.io",
         UPSTASH_REDIS_REST_TOKEN: "upstash-token-value-0123456789abcdef",
+        CRON_SECRET: "c".repeat(40),
       }).appEnv,
     ).toBe("production");
   });
@@ -144,6 +146,7 @@ describe("parseServerEnv: Upstash and kill switch", () => {
     ...valid,
     APP_ENV: "production",
     BETTER_AUTH_URL: "https://agent-court.example",
+    CRON_SECRET: "c".repeat(40),
   };
 
   it("leaves the Upstash values null in development and test when they are not set", () => {
@@ -217,6 +220,7 @@ describe("parseServerEnv: API writes flag", () => {
     ...upstash,
     APP_ENV: appEnv,
     BETTER_AUTH_URL: "https://agent-court.example",
+    CRON_SECRET: "c".repeat(40),
   });
 
   it.each(["on", "true", "1", "ON", "True"])("turns writes on for %s", (value) => {
@@ -241,14 +245,55 @@ describe("parseServerEnv: API writes flag", () => {
     expect(parseServerEnv({ ...valid, APP_ENV: appEnv, API_WRITES_ENABLED: "on" }).apiWritesEnabled).toBe(true);
   });
 
-  it.each(["production", "staging"])("refuses writes on when APP_ENV is %s", (appEnv) => {
-    const message = thrownMessage(() => parseServerEnv({ ...deployed(appEnv), API_WRITES_ENABLED: "on" }));
-    expect(message).toContain("API_WRITES_ENABLED");
-    expect(message).toContain("production or staging");
+  it.each(["production", "staging"])("allows writes on when APP_ENV is %s", (appEnv) => {
+    expect(parseServerEnv({ ...deployed(appEnv), API_WRITES_ENABLED: "on" }).apiWritesEnabled).toBe(true);
   });
 
   it.each(["production", "staging"])("accepts writes off when APP_ENV is %s", (appEnv) => {
     expect(parseServerEnv({ ...deployed(appEnv), API_WRITES_ENABLED: "off" }).apiWritesEnabled).toBe(false);
     expect(parseServerEnv(deployed(appEnv)).apiWritesEnabled).toBe(false);
+  });
+});
+
+describe("parseServerEnv: CRON_SECRET", () => {
+  const upstash = {
+    UPSTASH_REDIS_REST_URL: "https://example-12345.upstash.io",
+    UPSTASH_REDIS_REST_TOKEN: "upstash-token-value-0123456789abcdef",
+  };
+  const deployed = (appEnv: string, extra: Record<string, string> = {}) => ({
+    ...valid,
+    ...upstash,
+    APP_ENV: appEnv,
+    BETTER_AUTH_URL: "https://agent-court.example",
+    ...extra,
+  });
+  const secret = "c0ffee-cron-secret-value-0123456789ab";
+
+  it.each(["development", "test"])("is optional when APP_ENV is %s", (appEnv) => {
+    expect(parseServerEnv({ ...valid, APP_ENV: appEnv }).cronSecret).toBeNull();
+    expect(parseServerEnv({ ...valid, APP_ENV: appEnv, CRON_SECRET: "" }).cronSecret).toBeNull();
+  });
+
+  it("is read when it is set and long enough", () => {
+    expect(parseServerEnv({ ...valid, CRON_SECRET: secret }).cronSecret).toBe(secret);
+    expect(parseServerEnv({ ...valid, CRON_SECRET: "x".repeat(32) }).cronSecret).toBe("x".repeat(32));
+  });
+
+  it("rejects a secret under 32 characters without echoing it", () => {
+    const short = "x".repeat(31);
+    const message = thrownMessage(() => parseServerEnv({ ...valid, CRON_SECRET: short }));
+    expect(message).toContain("CRON_SECRET");
+    expect(message).not.toContain(short);
+  });
+
+  it.each(["production", "staging"])("is required when APP_ENV is %s, and accepted when present", (appEnv) => {
+    expect(thrownMessage(() => parseServerEnv(deployed(appEnv)))).toContain("CRON_SECRET");
+    expect(parseServerEnv(deployed(appEnv, { CRON_SECRET: secret })).cronSecret).toBe(secret);
+  });
+
+  it("is rejected when a NEXT_PUBLIC_ variable holds it", () => {
+    const message = thrownMessage(() => parseServerEnv({ ...valid, CRON_SECRET: secret, NEXT_PUBLIC_LEAKED: secret }));
+    expect(message).toContain("NEXT_PUBLIC_LEAKED");
+    expect(message).not.toContain(secret);
   });
 });

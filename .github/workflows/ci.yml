@@ -27,6 +27,7 @@ jobs:
       GITHUB_CLIENT_SECRET: canary-github-client-secret-0004
       UPSTASH_REDIS_REST_URL: https://canary.upstash.example
       UPSTASH_REDIS_REST_TOKEN: canary-upstash-token-000000000005
+      CRON_SECRET: canary-cron-secret-0000000000000006
       APP_ENV: test
     steps:
       - uses: actions/checkout@v4
