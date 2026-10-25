@@ -1,3 +1,5 @@
+import { logger } from "@/lib/config/logger";
+
 export type GateTarget = "case" | "evidence" | "argument";
 
 export type GateInput = {
@@ -42,15 +44,20 @@ function isDecision(value: unknown): value is GateDecision {
 
 /**
  * Runs the gate and fails closed: a thrown error or a malformed decision becomes `flag`, never `pass`.
- * The error text is dropped on purpose, so a message that quotes content cannot reach a report or a log.
+ * The failure is logged with its class and the target only. The error text is dropped on purpose, so a message
+ * that quotes content cannot reach a report or a log.
  */
 export async function screenSafely(gate: SafetyGate, input: GateInput): Promise<GateDecision> {
   try {
     const decision = await gate.screen(input);
     // The stored text comes from the returned fields, so every field that went in must come back.
     if (isDecision(decision) && Object.keys(input.fields).every((key) => key in decision.fields)) return decision;
-  } catch {
-    // fall through to the fail-closed decision
+    logger.warn("gate failure", { target: input.target, errorClass: "InvalidDecision" });
+  } catch (error) {
+    logger.warn("gate failure", {
+      target: input.target,
+      errorClass: error instanceof Error ? error.constructor.name : "NonError",
+    });
   }
   return { outcome: "flag", fields: input.fields, report: { error: "gate_failure" } };
 }

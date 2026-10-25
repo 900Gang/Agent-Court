@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { screenSafely, type GateTarget } from "@/lib/safety/gate";
 import { failClosedGate } from "@/lib/safety/stub";
 import { blockGate, brokenGate, passGate, throwingGate } from "../helpers/gates";
@@ -75,5 +75,37 @@ describe("screenSafely: returned fields", () => {
     expect(decision.outcome).toBe("flag");
     expect(decision.fields).toEqual(fields);
     expect(decision.report).toEqual({ error: "gate_failure" });
+  });
+});
+
+describe("screenSafely: logging", () => {
+  it("logs the error class and the target, never the message or the field values", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await screenSafely(throwingGate, input("case"));
+      expect(warn).toHaveBeenCalledTimes(1);
+      const line = String(warn.mock.calls[0][0]);
+      expect(line).toContain("gate failure");
+      expect(line).toContain("Error");
+      expect(line).toContain("case");
+      expect(line).not.toContain("sk-live-secret");
+      expect(line).not.toContain("A title");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("logs a malformed decision as a failure too, and logs nothing for a good one", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await screenSafely(brokenGate, input("evidence"));
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toContain("InvalidDecision");
+      warn.mockClear();
+      await screenSafely(passGate, input("case"));
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
