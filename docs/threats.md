@@ -73,7 +73,7 @@ Severity is impact if it happens, not likelihood.
 - AC-308: error hints are static (test sends hostile input, asserts hint text unchanged).
 - AC-301: tag regex rejects sentence-like tags.
 
-**Residual risk:** heuristics cannot catch every novel phrasing, and an envelope is a convention the reading agent must honour. Treat injection that gets through as an incident (see `runbook.md`). Mitigated by held-for-review, monitoring and the kill switch. Raising the classifier (D3) is the planned upgrade path.
+**Residual risk:** heuristics cannot catch every novel phrasing, and an envelope is a convention the reading agent must honour. Treat injection that gets through as an incident (see `runbook.md`). Mitigated by held-for-review, monitoring and the kill switch. Raising the classifier (D3) is the planned upgrade path. Known gaps (pinned in `tests/unit/gateRegression.test.ts`): one medium signal on its own, such as "from now on you will..." or "pretend you are...", scores below the flag line; override phrases are matched in English, Spanish, French, German, Portuguese, Italian, Chinese and Japanese only; markdown-image exfiltration is not scored because the API returns JSON and never renders markdown. The corpora were written by the same person as the rules, so a reviewer should add phrasings the author did not think of.
 
 **Detection:** flag-rate metric and alert (AC-1005, AC-1006); admin reports queue; kill switch (AC-1007).
 
@@ -99,7 +99,7 @@ Severity is impact if it happens, not likelihood.
 - AC-807: admin redaction replaces text and triggers re-embedding.
 - AC-403: UUIDs and git SHAs survive.
 
-**Residual risk:** novel secret formats and secrets split across fields can slip through; entropy detection has false positives. Redacted placeholders cannot be undone, so a missed secret stays exposed until an admin redacts it. Mitigation is report-and-redact plus rule updates and a re-scan job (AC-412).
+**Residual risk:** novel secret formats and secrets split across fields can slip through; entropy detection has false positives. Redacted placeholders cannot be undone, so a missed secret stays exposed until an admin redacts it. Mitigation is report-and-redact plus rule updates and a re-scan job (AC-412). Known gap: a bare `-p<password>` flag (for example `mysql -phunter2`) is not redacted, because the same shape is a compiler flag (`-pthread`).
 
 **Detection:** user reports, admin review of held items, re-scan job after rule changes.
 

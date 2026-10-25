@@ -47,7 +47,7 @@ const PLACEHOLDER_START = /^[<$*{[%(`]/;
 const PLACEHOLDER_WORD =
   /^(?:x{3,}|\*+|\.{3,}|null|none|nil|undefined|true|false|redacted|changeme|change[-_]me|placeholder|example|dummy|sample|todo|tbd)$/i;
 const PLACEHOLDER_PREFIX = /^(?:your|my)[-_]/i;
-const AUTH_SCHEME = /^(?:basic|digest|token|bearer)[ \t]+/i;
+const AUTH_SCHEME = /^(?:basic|digest|token|bearer|apikey|api-key)[ \t]+/i;
 const MAX_VALUE = 256;
 const MIN_VALUE = 6;
 
@@ -65,9 +65,12 @@ function blanks(text: string, pos: number): number {
   return i;
 }
 
+const isPlaceholder = (value: string) =>
+  PLACEHOLDER_START.test(value) || PLACEHOLDER_WORD.test(value) || PLACEHOLDER_PREFIX.test(value);
+
 function looksLikeSecret(value: string, separator: string, quoted: boolean): boolean {
   if (value.length < MIN_VALUE) return false;
-  if (PLACEHOLDER_START.test(value) || PLACEHOLDER_WORD.test(value) || PLACEHOLDER_PREFIX.test(value)) return false;
+  if (isPlaceholder(value)) return false;
   // "invalid token: expected" is prose; a secret after a bare colon has a digit or a symbol.
   if (separator === ":" && !quoted && !/[^A-Za-z]/.test(value)) return false;
   return true;
@@ -89,6 +92,8 @@ function contextSpans(text: string, out: Span[]): void {
     const open = quoteLength(text, pos);
     const quoted = open > 0;
     pos += open;
+    // A quoted value runs to the matching quote and may hold spaces; an escaped quote (backslash, quote) ends at the backslash.
+    const closing = open === 2 ? "\\" : text[pos - 1];
 
     if (/^authorization$/i.test(hit[0])) {
       const scheme = AUTH_SCHEME.exec(text.slice(pos, pos + 16));
@@ -96,9 +101,44 @@ function contextSpans(text: string, out: Span[]): void {
     }
 
     let end = pos;
-    while (end < text.length && end - pos < MAX_VALUE && !TERMINATORS.has(text[end])) end++;
+    while (end < text.length && end - pos < MAX_VALUE) {
+      const c = text[end];
+      if (quoted ? c === closing || c === "\n" || c === "\r" : TERMINATORS.has(c)) break;
+      end++;
+    }
     if (end > pos && looksLikeSecret(text.slice(pos, end), separator, quoted)) {
       out.push({ type: "generic_secret", start: pos, end, rank: CONTEXT_RANK });
+    }
+  }
+}
+
+// ---- command-line flags (--password hunter22, --api-key=...) and curl --user name:password
+
+const CLI_FLAG =
+  /(?<![A-Za-z0-9_-])--?(?:password|passwd|pwd|passphrase|token|secret|api[_-]?key|apikey|auth[_-]?token|access[_-]?token|client[_-]?secret)(?:[ \t]+|=)(?:"([^"\n]{6,256})"|'([^'\n]{6,256})'|([^\s"']{6,256}))/gid;
+const CURL_USER =
+  /\b(?:curl|wget|http|https|httpie)\b[^\n|]{0,200}?\s(?:-u|--user|--proxy-user)(?:[ \t]+|=)["']?[^\s:"'@]{1,64}:([^\s"']{4,128})/gid;
+
+type Indexed = RegExpMatchArray & { indices: Array<[number, number] | undefined> };
+
+function flagSpans(text: string, out: Span[]): void {
+  for (const match of text.matchAll(CLI_FLAG)) {
+    const indices = (match as Indexed).indices;
+    const span = indices[1] ?? indices[2] ?? indices[3];
+    if (!span) continue;
+    // After a space (not an equals sign) a plain word is more likely prose: "the --token flag".
+    const separator = text.slice(match.index as number, span[0]).includes("=") ? "=" : ":";
+    if (looksLikeSecret(text.slice(span[0], span[1]), separator, indices[1] !== undefined || indices[2] !== undefined)) {
+      out.push({ type: "generic_secret", start: span[0], end: span[1], rank: CONTEXT_RANK });
+    }
+  }
+}
+
+function curlSpans(text: string, out: Span[]): void {
+  for (const match of text.matchAll(CURL_USER)) {
+    const span = (match as Indexed).indices[1];
+    if (span && !isPlaceholder(text.slice(span[0], span[1]))) {
+      out.push({ type: "generic_secret", start: span[0], end: span[1], rank: CONTEXT_RANK });
     }
   }
 }
@@ -160,6 +200,8 @@ export function redactText(text: string): { text: string; items: RedactionItem[]
   const spans: Span[] = [];
   patternSpans(text, spans);
   contextSpans(text, spans);
+  flagSpans(text, spans);
+  curlSpans(text, spans);
   entropySpans(text, spans);
   spans.sort((a, b) => a.start - b.start || b.end - b.start - (a.end - a.start) || a.rank - b.rank);
 

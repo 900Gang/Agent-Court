@@ -114,13 +114,13 @@ Depends on: N3.
 
 | ID | Ticket | Acceptance | Status |
 |---|---|---|---|
-| AC-401 | Fixture corpora: 50+ secrets, 50+ injections, 100+ clean traces | Files in `tests/fixtures/`; reviewed for realism | todo |
-| AC-402 | Normalization and limits | NFKC, zero-width/bidi stripped; size limits enforced | todo |
-| AC-403 | Redaction engine with pattern catalogue and entropy detection | ≥ 98% of planted secrets redacted; UUIDs and git SHAs preserved; own key format caught | todo |
-| AC-404 | Redaction report | Contains type, position, length only; test proves no matched value appears anywhere | todo |
-| AC-405 | Injection scorer and threshold | All injection fixtures flagged or blocked; < 5% false flags on clean fixtures | todo |
-| AC-406 | Link handling | Links remain plain text; never fetched | todo |
-| AC-407 | Gate orchestrator (`lib/safety/gate.ts`) | Order: rate → normalize/limits → redact → injection → links → outcome; fails closed on any error | todo |
+| AC-401 | Fixture corpora: 50+ secrets, 50+ injections, 100+ clean traces | Files in `tests/fixtures/`; reviewed for realism | done |
+| AC-402 | Normalization and limits | NFKC, zero-width/bidi stripped; size limits enforced | done |
+| AC-403 | Redaction engine with pattern catalogue and entropy detection | ≥ 98% of planted secrets redacted; UUIDs and git SHAs preserved; own key format caught | done |
+| AC-404 | Redaction report | Contains type, position, length only; test proves no matched value appears anywhere | done |
+| AC-405 | Injection scorer and threshold | All injection fixtures flagged or blocked; < 5% false flags on clean fixtures | done |
+| AC-406 | Link handling | Links remain plain text; never fetched | done |
+| AC-407 | Gate orchestrator (`lib/safety/gate.ts`) | Order: rate → normalize/limits → redact → injection → links → outcome; fails closed on any error | done |
 | AC-408 | Wire gate into every write path; replace the stub | `check:routes` passes; test enumerates routes | todo |
 | AC-409 | `held` handling for cases and arguments | Visible only to owner and admins | todo |
 | AC-410 | Admin moderation queue (`app/admin/moderation`) | Approve/reject held items; `requireAdmin`; escaped rendering; audit rows | todo |

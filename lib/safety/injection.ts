@@ -21,6 +21,8 @@ const S = String.raw`[^\w]{1,10}`;
 const S4 = String.raw`[^\w]{1,4}`;
 const SECRET_THING = String.raw`(?:api[^\w]?keys?|tokens?|credentials?|secrets?|passwords?|environment(?:${S4}variables)?)`;
 
+const NOUN = String.raw`(?:instructions?|prompts?|messages?|rules|directions?|directives?|guidelines?|orders?|commands?|context)`;
+
 export const INJECTION_RULES: readonly InjectionRule[] = [
   // ---- override: explicit instruction overrides (strong), role resets (medium), jargon (weak)
   {
@@ -28,11 +30,33 @@ export const INJECTION_RULES: readonly InjectionRule[] = [
     family: "override",
     weight: 3,
     regex: new RegExp(
-      String.raw`\b(?:ignore|disregard|forget)${S}(?:(?:all|any|the|your|my|these|those|every)${S})*(?:previous|prior|above|earlier|preceding|former)${S}(?:instructions?|prompts?|messages?|rules|directions?|context)\b`,
+      String.raw`\b(?:ignore|disregard|forget)${S}(?:(?:all|any|the|your|my|these|those|every|of)${S})*(?:(?:previous|prior|above|earlier|preceding|former)${S}${NOUN}|${NOUN}${S}(?:above|before|so${S}far|given)|above(?=\s*(?:[.,;:!]|$|and\b|then\b|but\b|instead\b|only\b|just\b)))\b`,
       "gi",
     ),
   },
-  { id: "forget_everything", family: "override", weight: 3, regex: new RegExp(String.raw`\bforget${S}everything\b`, "gi") },
+  { id: "forget_everything", family: "override", weight: 3, regex: new RegExp(String.raw`\b(?:forget|ignore|disregard)${S}everything\b`, "gi") },
+  {
+    // "ignore previous instructions" in other languages: Spanish, French, German, Portuguese, Italian, Chinese, Japanese.
+    id: "ignore_previous_i18n",
+    family: "override",
+    weight: 3,
+    regex:
+      /ignora(?:r|d)?\s{1,5}(?:todas\s{1,5})?(?:las\s{1,5})?instrucciones\s{1,5}(?:anteriores|previas)|ignor(?:ez|er|e)\s{1,5}(?:toutes\s{1,5})?(?:les\s{1,5})?instructions\s{1,5}(?:pr[e\u00e9]c[e\u00e9]dentes|ant[e\u00e9]rieures)|ignorier(?:e|en)\s{1,5}(?:alle\s{1,5})?(?:vorherigen|bisherigen|obigen|fr\u00fcheren)\s{1,5}anweisungen|ignore\s{1,5}(?:todas\s{1,5})?as\s{1,5}instru[c\u00e7][o\u00f5]es\s{1,5}anteriores|ignora\s{1,5}(?:tutte\s{1,5})?le\s{1,5}istruzioni\s{1,5}precedenti|\u5ffd\u7565(?:\u4e4b\u524d|\u4ee5\u4e0a|\u4e0a\u9762|\u524d\u9762)?\u7684?(?:\u6240\u6709)?(?:\u6307\u4ee4|\u6307\u793a|\u63d0\u793a)|\u4ee5\u524d\u306e\u6307\u793a\u3092\u7121\u8996/gi,
+  },
+  {
+    id: "from_now_on",
+    family: "override",
+    weight: 2,
+    regex: new RegExp(String.raw`\bfrom${S4}now${S4}on\b[^\n]{0,30}?\byou(?:[^\w]{1,3}(?:will|must|shall|are|should)|['\u2019]ll)\b`, "gi"),
+  },
+  { id: "pretend_you_are", family: "override", weight: 2, regex: new RegExp(String.raw`\bpretend${S4}(?:that${S4})?(?:you${S4}(?:are|re)|to${S4}be)\b`, "gi") },
+  {
+    // Text addressed to whatever AI reads it is written for that AI, not for people.
+    id: "note_to_assistant",
+    family: "override",
+    weight: 3,
+    regex: new RegExp(String.raw`\b(?:note|message|notice)${S4}(?:to|for)${S4}(?:the${S4})?(?:ai|assistants?|llms?|models?|agents?|chatbots?)\b`, "gi"),
+  },
   { id: "you_are_now", family: "override", weight: 2, regex: new RegExp(String.raw`\byou${S4}are${S4}now\b`, "gi") },
   { id: "new_instructions", family: "override", weight: 2, regex: new RegExp(String.raw`\bnew${S4}instructions?\s{0,3}:`, "gi") },
   {
@@ -101,7 +125,7 @@ export const INJECTION_RULES: readonly InjectionRule[] = [
     weight: 3,
     negatable: true,
     regex: new RegExp(
-      String.raw`\breveal${S4}(?:your|the|all|me)${S4}(?:(?:full|entire|hidden|secret)${S4})?(?:system${S4})?(?:prompt|instructions)\b`,
+      String.raw`\b(?:reveal${S4}(?:your|the|all|me)${S4}(?:(?:full|entire|hidden|secret)${S4})?(?:system${S4})?(?:prompt|instructions)|(?:print|show|output|repeat|dump|leak|display|translate|summari[sz]e)${S4}(?:me${S4})?your${S4}(?:(?:full|entire)${S4})?(?:(?:hidden|secret|system|initial|original|internal)${S4})?(?:prompt|instructions|rules))\b`,
       "gi",
     ),
   },
@@ -110,6 +134,20 @@ export const INJECTION_RULES: readonly InjectionRule[] = [
     family: "exfiltration",
     weight: 3,
     regex: new RegExp(String.raw`\bpost${S4}(?:them|it|these|those|the${S4}\w+)${S4}to${S4}https?:\/\/\S+`, "gi"),
+  },
+  { id: "exfil_pipe_out", family: "exfiltration", weight: 3, regex: /\b(?:printenv|env|history|cat\s+\S+)\s*\|\s*(?:curl|wget|nc|ncat|netcat)\b/gi },
+  {
+    id: "exfil_repeat_above",
+    family: "exfiltration",
+    weight: 3,
+    negatable: true,
+    regex: new RegExp(String.raw`\brepeat${S4}(?:all${S4}(?:of${S4})?)?(?:the${S4})?(?:words|text|content|everything)${S4}above\b`, "gi"),
+  },
+  {
+    id: "exfil_powershell_iex",
+    family: "exfiltration",
+    weight: 3,
+    regex: /\b(?:iex|invoke-expression)\b[^\n]{0,60}?\b(?:iwr|irm|invoke-webrequest|invoke-restmethod|downloadstring|webclient)\b|\|\s*iex\b/gi,
   },
 
   // ---- hidden payloads

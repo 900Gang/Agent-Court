@@ -242,7 +242,8 @@ All routes require the `CRON_SECRET` header and are idempotent.
 
 | File | Why | What it does | Node |
 |---|---|---|---|
-| `gate.ts` | Single entry point | Runs the steps in plan Section 7 in order; fails closed on error; writes `moderation_events` | N4 (stub in N3) |
+| `gate.ts` | The interface | `SafetyGate`, `GateInput`, `GateDecision`; `screenSafely` turns any failure into `flag` and logs the error class only | N3, N4 |
+| `engine.ts` | The orchestrator | `createGate()`: normalize, limits, redact, injection, links, outcome, per field; builds the report (ids, counts, positions; never text) | N4 |
 | `normalize.ts` | Defeat unicode tricks | NFKC, strips zero-width and bidi characters | N4 |
 | `limits.ts` | Shape checks | Size limits per field | N4 |
 | `redact.ts` | Secret removal | Runs pattern families and entropy detection, allowlists UUIDs and git SHAs, returns text with `[REDACTED:type]` and a report with no matched values | N4 |

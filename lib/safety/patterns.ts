@@ -41,7 +41,7 @@ export function isAllowedEmailDomain(domain: string): boolean {
 }
 
 function cardValid(matched: string): boolean {
-  const digits = matched.replace(/[ -]/g, "");
+  const digits = matched.replace(/[ .-]/g, "");
   // Card numbers start with 3 to 6 (Amex, Visa, Mastercard, Discover, JCB, Diners); epoch timestamps start with 1.
   return digits.length >= 13 && digits.length <= 19 && /^[3-6]/.test(digits) && luhnValid(digits);
 }
@@ -86,6 +86,6 @@ export const PATTERNS: readonly PatternRule[] = [
     type: "phone",
     regex: /(?:\+[1-9](?:[ .-]?[0-9]){7,14}|(?<![0-9])\(?[0-9]{3}\)?[ .-][0-9]{3}[ .-][0-9]{4}(?![0-9]))/g,
   },
-  { type: "card", regex: /(?<![0-9])(?:[0-9][ -]?){12,18}[0-9](?![0-9])/g, validate: cardValid },
+  { type: "card", regex: /(?<![0-9])(?:[0-9][ .-]?){12,18}[0-9](?![0-9])/g, validate: cardValid },
   { type: "ssn", regex: /(?<![0-9-])(?!000|666)[0-9]{3}-(?!00)[0-9]{2}-(?!0000)[0-9]{4}(?![0-9-])/g },
 ];
