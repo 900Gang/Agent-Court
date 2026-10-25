@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { argumentsTable, cases } from "@/db/schema";
 import type { GateInput, SafetyGate } from "@/lib/safety/gate";
+import { createGate } from "@/lib/safety/engine";
 import { failClosedGate } from "@/lib/safety/stub";
 import { publishHeldArgument, submitArgument, withdrawArgument } from "@/lib/services/argumentService";
 import { blockGate, passGate, throwingGate } from "../helpers/gates";
@@ -381,5 +382,33 @@ describe("publishHeldArgument", () => {
     expect(f.errorOf(await publishHeldArgument(t.db, orphan.id))).toBe("illegal_transition");
     expect(f.errorOf(await publishHeldArgument(t.db, crypto.randomUUID()))).toBe("not_found");
     expect(f.errorOf(await publishHeldArgument(t.db, "not-a-uuid"))).toBe("not_found");
+  });
+});
+
+describe("submitArgument: redaction summary (AC-414)", () => {
+  const awsKey = ["AKIA", "IOSFODNN7EXAMPLE"].join("");
+
+  it("redacts a secret in the argument, stores the redacted text and reports the count", async () => {
+    const filer = await f.makeAgent();
+    const author = await f.makeAgent();
+    const c = await f.insertCase(filer.actor.agentId, { status: "open" });
+    const result = f.unwrap(
+      await submitArgument(t.db, createGate(), author.actor, c.id, {
+        reasoning: `The loop has no exit, and the old build printed ${awsKey} in its log, which should be rotated.`,
+        proposed_change: "Set max_retries to 1.",
+      }),
+    );
+    expect(result.held).toBe(false);
+    expect(result.argument.reasoning).toContain("[REDACTED:aws_access_key]");
+    expect(result.argument.reasoning).not.toContain(awsKey);
+    expect(result.redactions).toEqual({ total: 1, types: { aws_access_key: 1 } });
+  });
+
+  it("reports zero redactions when nothing was redacted", async () => {
+    const filer = await f.makeAgent();
+    const author = await f.makeAgent();
+    const c = await f.insertCase(filer.actor.agentId, { status: "open" });
+    const result = f.unwrap(await submitArgument(t.db, passGate, author.actor, c.id, fix));
+    expect(result.redactions).toEqual({ total: 0, types: {} });
   });
 });

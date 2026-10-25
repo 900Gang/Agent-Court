@@ -2,6 +2,7 @@ import { and, count, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { agents, argumentsTable, cases, evidence, type Case, type Evidence } from "@/db/schema";
 import type { Database } from "@/db/types";
 import { LIMITS, PUBLIC_CASE_STATUSES } from "@/lib/config/constants";
+import { applyCaseFields, caseGateFields, summarizeRedactions, type RedactionSummary } from "@/lib/safety/fields";
 import { screenSafely, type GateDecision, type SafetyGate } from "@/lib/safety/gate";
 import { parseCaseInput } from "@/lib/schemas/case";
 import { parseEvidenceInput } from "@/lib/schemas/evidence";
@@ -38,7 +39,10 @@ async function recordBlock(db: Database, targetType: "case" | "evidence", decisi
   });
 }
 
-type FileCaseResult = ServiceResult<{ case: Case; evidence: Evidence[]; held: boolean }, "invalid" | "blocked">;
+type FileCaseResult = ServiceResult<
+  { case: Case; evidence: Evidence[]; held: boolean; redactions: RedactionSummary },
+  "invalid" | "blocked"
+>;
 
 /**
  * Files a case. The gate screens the text first (outside the transaction, so a slow gate holds no locks);
@@ -56,13 +60,12 @@ export async function fileCase(
   if (!parsed.ok) return parsed;
   const input = parsed.value;
 
-  const caseDecision = await screenSafely(gate, {
-    target: "case",
-    fields: { title: input.title, summary: input.summary, expected: input.expected, actual: input.actual },
-  });
+  const caseDecision = await screenSafely(gate, { target: "case", fields: caseGateFields(input) });
   const evidenceDecisions: GateDecision[] = [];
   for (const item of input.evidence) {
-    evidenceDecisions.push(await screenSafely(gate, { target: "evidence", fields: { text: item.text } }));
+    evidenceDecisions.push(
+      await screenSafely(gate, { target: "evidence", fields: { text: item.text }, context: { evidenceKind: item.kind } }),
+    );
   }
 
   let blocked = false;
@@ -78,19 +81,21 @@ export async function fileCase(
   }
   if (blocked) return fail("blocked");
 
-  const held = caseDecision.outcome !== "pass";
+  // A dropped tag means the gate changed something it should not have had to: a person looks before it goes public.
+  const applied = applyCaseFields(input, caseDecision.fields);
+  const held = caseDecision.outcome !== "pass" || applied.droppedTags > 0;
 
   return db.transaction(async (tx): Promise<FileCaseResult> => {
     const [row] = await tx
       .insert(cases)
       .values({
         agentId: actor.agentId,
-        title: caseDecision.fields.title,
-        summary: caseDecision.fields.summary,
-        expected: caseDecision.fields.expected,
-        actual: caseDecision.fields.actual,
-        environment: input.environment,
-        tags: input.tags,
+        title: applied.title,
+        summary: applied.summary,
+        expected: applied.expected,
+        actual: applied.actual,
+        environment: applied.environment,
+        tags: applied.tags,
         status: held ? "held" : "open",
         publishedAt: held ? null : now,
       })
@@ -99,8 +104,8 @@ export async function fileCase(
       targetType: "case",
       targetId: row.id,
       check: "injection",
-      result: caseDecision.outcome === "pass" ? "pass" : "flag",
-      details: caseDecision.report,
+      result: held ? "flag" : "pass",
+      details: applied.droppedTags > 0 ? { ...caseDecision.report, droppedTags: applied.droppedTags } : caseDecision.report,
     });
 
     const stored: Evidence[] = [];
@@ -132,11 +137,17 @@ export async function fileCase(
       target: row.id,
       metadata: { caseId: row.id, status: row.status, evidenceCount: stored.length },
     });
-    return ok({ case: row, evidence: stored, held });
+    return ok({
+      case: row,
+      evidence: stored,
+      held,
+      redactions: summarizeRedactions([caseDecision, ...evidenceDecisions]),
+    });
   });
 }
 
 type AddEvidenceError = "invalid" | "blocked" | "not_found" | "illegal_transition" | "limit_reached";
+type AddEvidenceValue = { evidence: Evidence; held: boolean; redactions: RedactionSummary };
 
 function evidenceGuard(
   c: Case | undefined,
@@ -162,8 +173,8 @@ export async function addEvidence(
   actor: Actor,
   caseId: string,
   raw: unknown,
-): Promise<ServiceResult<{ evidence: Evidence; held: boolean }, AddEvidenceError>> {
-  type Result = ServiceResult<{ evidence: Evidence; held: boolean }, AddEvidenceError>;
+): Promise<ServiceResult<AddEvidenceValue, AddEvidenceError>> {
+  type Result = ServiceResult<AddEvidenceValue, AddEvidenceError>;
   if (!UUID.test(caseId)) return fail("not_found");
   const parsed = parseEvidenceInput(raw);
   if (!parsed.ok) return parsed;
@@ -173,7 +184,11 @@ export async function addEvidence(
   const early = evidenceGuard(await readCase(db, caseId), actor, await evidenceCount(db, caseId));
   if (early) return fail(early);
 
-  const decision = await screenSafely(gate, { target: "evidence", fields: { text: input.text } });
+  const decision = await screenSafely(gate, {
+    target: "evidence",
+    fields: { text: input.text },
+    context: { evidenceKind: input.kind },
+  });
   if (decision.outcome === "block") {
     await recordBlock(db, "evidence", decision);
     return fail("blocked");
@@ -203,7 +218,7 @@ export async function addEvidence(
       target: saved.id,
       metadata: { caseId },
     });
-    return ok({ evidence: saved, held });
+    return ok({ evidence: saved, held, redactions: summarizeRedactions([decision]) });
   });
 }
 

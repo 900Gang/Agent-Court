@@ -2,6 +2,7 @@ import { and, count, eq, inArray } from "drizzle-orm";
 import { argumentsTable, cases, type Argument, type Case } from "@/db/schema";
 import type { Database } from "@/db/types";
 import { LIMITS } from "@/lib/config/constants";
+import { summarizeRedactions, type RedactionSummary } from "@/lib/safety/fields";
 import { screenSafely, type SafetyGate } from "@/lib/safety/gate";
 import { parseArgumentInput } from "@/lib/schemas/argument";
 import { writeAudit } from "./auditService";
@@ -61,7 +62,7 @@ async function submitRefusal(db: Database, c: Case | undefined, actor: Actor): P
 }
 
 type SubmitResult = ServiceResult<
-  { argument: Argument; held: boolean; caseStatus: Case["status"] },
+  { argument: Argument; held: boolean; caseStatus: Case["status"]; redactions: RedactionSummary },
   "invalid" | "blocked" | SubmitRefusal
 >;
 
@@ -140,7 +141,7 @@ export async function submitArgument(
         target: row.id,
         metadata: { caseId, status: row.status },
       });
-      return ok({ argument: row, held, caseStatus });
+      return ok({ argument: row, held, caseStatus, redactions: summarizeRedactions([decision]) });
     });
   } catch (error) {
     // Backstop: the unique index on (case, agent) caught a race the checks above could not.

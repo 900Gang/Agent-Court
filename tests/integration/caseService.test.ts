@@ -9,6 +9,7 @@ import {
   type Case,
   type NewCase,
 } from "@/db/schema";
+import { createGate } from "@/lib/safety/engine";
 import { failClosedGate } from "@/lib/safety/stub";
 import type { GateInput, SafetyGate } from "@/lib/safety/gate";
 import { decodeCursor, type ListQuery } from "@/lib/schemas/pagination";
@@ -513,5 +514,225 @@ describe("getAgentByHandle", () => {
     expect(await getAgentByHandle(t.db, agent.handle.toUpperCase())).toBeNull();
     await t.db.update(agents).set({ deletedAt: NOW }).where(eq(agents.id, agent.id));
     expect(await getAgentByHandle(t.db, agent.handle)).toBeNull();
+  });
+});
+
+describe("full field screening (AC-414, AC-411)", () => {
+  const awsKey = ["AKIA", "IOSFODNN7EXAMPLE"].join("");
+  const fullEnvironment = {
+    model: "model-a",
+    framework: "framework-b",
+    framework_version: "1.2.3",
+    language: "typescript",
+    os: "Windows 11",
+    tools: ["search", "calculator"],
+    notes: "Ran on a laptop.",
+  };
+
+  /** Flags or blocks when any field holds a marker word; passes everything else unchanged. */
+  const markerGate: SafetyGate = {
+    screen: async (input) => {
+      const values = Object.values(input.fields);
+      const outcome = values.some((value) => value.includes("blockme"))
+        ? "block"
+        : values.some((value) => value.includes("flagme"))
+          ? "flag"
+          : "pass";
+      return { outcome, fields: { ...input.fields }, report: {} };
+    },
+  };
+
+  it("sends the environment, tools and tags to the gate, and each evidence item with its kind", async () => {
+    const { actor } = await makeAgent();
+    const { gate, calls } = spyGate();
+    unwrap(
+      await fileCase(
+        t.db,
+        gate,
+        actor,
+        {
+          ...validCase,
+          environment: fullEnvironment,
+          tags: ["tool-call", "retry"],
+          evidence: [
+            { kind: "trace", text: "step 1" },
+            { kind: "prompt", text: "be helpful" },
+          ],
+        },
+        NOW,
+      ),
+    );
+    expect(calls).toHaveLength(3);
+    expect(calls[0].target).toBe("case");
+    expect(Object.keys(calls[0].fields).sort()).toEqual(
+      [
+        "title",
+        "summary",
+        "expected",
+        "actual",
+        "environment.model",
+        "environment.framework",
+        "environment.framework_version",
+        "environment.language",
+        "environment.os",
+        "environment.notes",
+        "environment.tools.0",
+        "environment.tools.1",
+        "tag.0",
+        "tag.1",
+      ].sort(),
+    );
+    expect(calls[1]).toMatchObject({ target: "evidence", fields: { text: "step 1" }, context: { evidenceKind: "trace" } });
+    expect(calls[2]).toMatchObject({ target: "evidence", fields: { text: "be helpful" }, context: { evidenceKind: "prompt" } });
+  });
+
+  it("publishes a clean case with a full environment through the real gate", async () => {
+    const { actor } = await makeAgent();
+    const result = unwrap(
+      await fileCase(t.db, createGate(), actor, { ...validCase, environment: fullEnvironment, tags: ["tool-call", "retry"] }, NOW),
+    );
+    expect(result.held).toBe(false);
+    expect(result.case.environment).toEqual(fullEnvironment);
+    expect(result.case.tags).toEqual(["tool-call", "retry"]);
+    expect(result.redactions).toEqual({ total: 0, types: {} });
+  });
+
+  it("redacts secrets in the environment and in evidence, and counts them", async () => {
+    const { actor } = await makeAgent();
+    const result = unwrap(
+      await fileCase(
+        t.db,
+        createGate(),
+        actor,
+        {
+          ...validCase,
+          environment: { model: "model-a", notes: `Run on a laptop; the shell history held ${awsKey} and nothing else worth reading.` },
+          evidence: [{ kind: "trace", text: `step 1 leaked ${awsKey} and then retried the call twice more before giving up` }],
+        },
+        NOW,
+      ),
+    );
+    expect(result.case.environment).toEqual({
+      model: "model-a",
+      notes: "Run on a laptop; the shell history held [REDACTED:aws_access_key] and nothing else worth reading.",
+    });
+    expect(result.evidence[0].redactedText).toContain("[REDACTED:aws_access_key]");
+    expect(JSON.stringify(result)).not.toContain(awsKey);
+    expect(result.redactions).toEqual({ total: 2, types: { aws_access_key: 2 } });
+  });
+
+  it("reports no redactions when the gate does not redact", async () => {
+    const { actor } = await makeAgent();
+    expect(unwrap(await fileCase(t.db, passGate, actor, validCase, NOW)).redactions).toEqual({ total: 0, types: {} });
+  });
+
+  it("stores the environment text the gate returns and keeps tags that came back unchanged", async () => {
+    const { actor } = await makeAgent();
+    const exclaim: SafetyGate = {
+      screen: async (input) => ({
+        outcome: "pass",
+        fields: Object.fromEntries(
+          Object.entries(input.fields).map(([key, value]) => [key, key.startsWith("tag.") ? value : `${value}!`]),
+        ),
+        report: {},
+      }),
+    };
+    const result = unwrap(await fileCase(t.db, exclaim, actor, { ...validCase, environment: fullEnvironment }, NOW));
+    expect(result.held).toBe(false);
+    expect(result.case.title).toBe("Tool call loops!");
+    expect(result.case.environment).toEqual({
+      model: "model-a!",
+      framework: "framework-b!",
+      framework_version: "1.2.3!",
+      language: "typescript!",
+      os: "Windows 11!",
+      tools: ["search!", "calculator!"],
+      notes: "Ran on a laptop.!",
+    });
+    expect(result.case.tags).toEqual(["tool-call"]);
+  });
+
+  it("holds the case and its evidence when only an environment field is flagged", async () => {
+    const { actor } = await makeAgent();
+    const result = unwrap(
+      await fileCase(t.db, markerGate, actor, { ...validCase, environment: { notes: "flagme" } }, NOW),
+    );
+    expect(result.held).toBe(true);
+    expect(result.case.status).toBe("held");
+    expect(result.evidence[0].status).toBe("held");
+  });
+
+  it("holds the case when only a tool name is flagged", async () => {
+    const { actor } = await makeAgent();
+    const result = unwrap(
+      await fileCase(t.db, markerGate, actor, { ...validCase, environment: { tools: ["search", "flagme"] } }, NOW),
+    );
+    expect(result.case.status).toBe("held");
+  });
+
+  it("holds the case when a tag is flagged", async () => {
+    const { actor } = await makeAgent();
+    const result = unwrap(await fileCase(t.db, markerGate, actor, { ...validCase, tags: ["flagme"] }, NOW));
+    expect(result.case.status).toBe("held");
+  });
+
+  it("blocks and stores nothing when only an environment field is blocked", async () => {
+    const { actor } = await makeAgent();
+    const result = await fileCase(t.db, markerGate, actor, { ...validCase, environment: { notes: "blockme" } }, NOW);
+    expect(errorOf(result)).toBe("blocked");
+    expect(await count("cases where agent_id = $1", [actor.agentId])).toBe(0);
+  });
+
+  it("drops a tag the gate changed, keeps the others, and holds the case even when the gate passes", async () => {
+    const { actor } = await makeAgent();
+    const rewriting: SafetyGate = {
+      screen: async (input) => ({
+        outcome: "pass",
+        fields: { ...input.fields, ...(input.target === "case" && "tag.0" in input.fields ? { "tag.0": "other" } : {}) },
+        report: {},
+      }),
+    };
+    const result = unwrap(await fileCase(t.db, rewriting, actor, { ...validCase, tags: ["tool-call", "retry"] }, NOW));
+    expect(result.case.tags).toEqual(["retry"]);
+    expect(result.held).toBe(true);
+    expect(result.case.status).toBe("held");
+    expect(result.case.publishedAt).toBeNull();
+    expect(result.evidence[0].status).toBe("held");
+  });
+
+  it("keeps the environment and tags unchanged when the gate throws", async () => {
+    const { actor } = await makeAgent();
+    const result = unwrap(
+      await fileCase(t.db, throwingGate, actor, { ...validCase, environment: fullEnvironment, tags: ["tool-call"] }, NOW),
+    );
+    expect(result.held).toBe(true);
+    expect(result.case.environment).toEqual(fullEnvironment);
+    expect(result.case.tags).toEqual(["tool-call"]);
+  });
+
+  it("passes the evidence kind when evidence is added later, and reports redactions", async () => {
+    const { actor } = await makeAgent();
+    const c = await insertCase(actor.agentId, { status: "open" });
+    const { gate, calls } = spyGate();
+    unwrap(await addEvidence(t.db, gate, actor, c.id, { kind: "error", text: "boom" }));
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ target: "evidence", context: { evidenceKind: "error" } });
+
+    const result = unwrap(
+      await addEvidence(t.db, createGate(), actor, c.id, {
+        kind: "error",
+        text: `crashed after ${awsKey} was echoed back in the log output line by line`,
+      }),
+    );
+    expect(result.evidence.redactedText).toContain("[REDACTED:aws_access_key]");
+    expect(result.evidence.redactedText).not.toContain(awsKey);
+    expect(result.redactions).toEqual({ total: 1, types: { aws_access_key: 1 } });
+  });
+
+  it("reports zero redactions for evidence the gate leaves alone", async () => {
+    const { actor } = await makeAgent();
+    const c = await insertCase(actor.agentId, { status: "open" });
+    const result = unwrap(await addEvidence(t.db, passGate, actor, c.id, { kind: "trace", text: "step 1" }));
+    expect(result.redactions).toEqual({ total: 0, types: {} });
   });
 });
