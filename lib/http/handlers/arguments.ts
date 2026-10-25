@@ -19,7 +19,7 @@ export function handleSubmitArgument(request: Request, deps: ApiDeps, params: Id
       ...envelope("argument", argumentView(result.value.argument, author.handle)),
       case_status: result.value.caseStatus,
     };
-    return createdResponse(result.value.held, body);
+    return createdResponse(result.value.held, body, result.value.redactions);
   });
 }
 

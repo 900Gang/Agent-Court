@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ApiScope } from "@/lib/config/constants";
-import { resetServerEnvCache } from "@/lib/config/env";
+import { parseServerEnv, resetServerEnvCache } from "@/lib/config/env";
 import { getApiDeps, type ApiDeps } from "@/lib/http/apiPipeline";
 import { ERROR_CODES, errorResponse } from "@/lib/http/errors";
 import { handleGetAgent } from "@/lib/http/handlers/agents";
@@ -253,22 +253,41 @@ describe("production wiring", () => {
     resetServerEnvCache();
   });
 
-  it("uses the fail-closed gate with writes off by default", () => {
+  const leakyText = `crashed after ${["AKIA", "IOSFODNN7EXAMPLE"].join("")} was echoed back in the log output line by line`;
+
+  it("uses the real gate with writes off by default", async () => {
     for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
     vi.stubEnv("API_WRITES_ENABLED", "");
     resetServerEnvCache();
     const wired = getApiDeps();
-    expect(wired.gate).toBe(failClosedGate);
     expect(wired.writesEnabled).toBe(false);
+    expect(wired.gate).not.toBe(failClosedGate);
+    const decision = await wired.gate.screen({ target: "evidence", fields: { text: leakyText } });
+    expect(decision.outcome).toBe("pass");
+    expect(decision.fields.text).toContain("[REDACTED:aws_access_key]");
   });
 
-  it("turns writes on only when the flag is set, and still uses the fail-closed gate", () => {
+  it("turns writes on only when the flag is set, and still uses the real gate", async () => {
     for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
     vi.stubEnv("API_WRITES_ENABLED", "on");
     resetServerEnvCache();
     const wired = getApiDeps();
     expect(wired.writesEnabled).toBe(true);
-    expect(wired.gate).toBe(failClosedGate);
+    expect(wired.gate).not.toBe(failClosedGate);
+    expect((await wired.gate.screen({ target: "evidence", fields: { text: leakyText } })).fields.text).toContain("[REDACTED:");
+  });
+
+  it.each(["production", "staging"])("accepts the write flag when APP_ENV is %s", (appEnv) => {
+    const parsed = parseServerEnv({
+      ...env,
+      APP_ENV: appEnv,
+      BETTER_AUTH_URL: "https://agent-court.example",
+      UPSTASH_REDIS_REST_URL: "https://example-12345.upstash.io",
+      UPSTASH_REDIS_REST_TOKEN: "upstash-token-value-0123456789abcdef",
+      CRON_SECRET: "c".repeat(40),
+      API_WRITES_ENABLED: "on",
+    });
+    expect(parsed.apiWritesEnabled).toBe(true);
   });
 });
 

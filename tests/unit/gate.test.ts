@@ -109,3 +109,23 @@ describe("screenSafely: logging", () => {
     }
   });
 });
+
+describe("the fail-closed stub is for tests only", () => {
+  const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+  function sourceFiles(dir: string): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) return entry.name === "node_modules" ? [] : sourceFiles(full);
+      return /\.(ts|tsx)$/.test(entry.name) ? [full] : [];
+    });
+  }
+
+  it("is imported by no file under app, lib or components", () => {
+    const offenders = ["app", "lib", "components"]
+      .flatMap((dir) => sourceFiles(path.join(root, dir)))
+      .filter((file) => !file.endsWith(`${path.sep}stub.ts`))
+      .filter((file) => /safety\/stub/.test(readFileSync(file, "utf8")));
+    expect(offenders).toEqual([]);
+  });
+});

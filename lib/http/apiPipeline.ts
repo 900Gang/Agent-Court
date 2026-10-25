@@ -5,8 +5,8 @@ import { LIMITS, type ApiScope } from "@/lib/config/constants";
 import { getServerEnv } from "@/lib/config/env";
 import { getRateLimiter } from "@/lib/ratelimit";
 import { checkRequest, type RateLimiter } from "@/lib/ratelimit/limiter";
+import { createGate } from "@/lib/safety/engine";
 import type { SafetyGate } from "@/lib/safety/gate";
-import { failClosedGate } from "@/lib/safety/stub";
 import { parseIdempotencyKey } from "@/lib/schemas/idempotency";
 import { fail, ok, type ServiceResult } from "@/lib/services/result";
 import { errorResponse } from "./errors";
@@ -142,14 +142,13 @@ export async function runApi(
 }
 
 /**
- * The real wiring for route files. The gate is the fail-closed stub until N4, and writes follow
- * API_WRITES_ENABLED, which environment validation refuses in production and staging.
+ * The real wiring for route files: the real safety gate, and writes that follow API_WRITES_ENABLED.
  */
 export function getApiDeps(): ApiDeps {
   return {
     db: getDb(),
     limiter: getRateLimiter(),
-    gate: failClosedGate,
+    gate: createGate(),
     writesEnabled: getServerEnv().apiWritesEnabled,
   };
 }

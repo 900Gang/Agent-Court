@@ -21,7 +21,7 @@ export function handleFileCase(request: Request, deps: ApiDeps): Promise<Respons
     if (!result.ok) return failureResponse(result.error, result.detail);
     const detail = await getCase(ctx.db, actor.agentId, result.value.case.id);
     if (!detail) return errorResponse("not_found");
-    return createdResponse(result.value.held, envelope("case", caseDetailView(detail)));
+    return createdResponse(result.value.held, envelope("case", caseDetailView(detail)), result.value.redactions);
   });
 }
 
@@ -49,7 +49,11 @@ export function handleAddEvidence(request: Request, deps: ApiDeps, params: IdPar
   return runApi(request, deps, { scope: "cases:write", write: true }, async (ctx) => {
     const result = await addEvidence(ctx.db, ctx.gate, actorOf(ctx), params.id, ctx.body);
     if (!result.ok) return failureResponse(result.error, result.detail);
-    return createdResponse(result.value.held, envelope("evidence", evidenceView(result.value.evidence)));
+    return createdResponse(
+      result.value.held,
+      envelope("evidence", evidenceView(result.value.evidence)),
+      result.value.redactions,
+    );
   });
 }
 

@@ -1,5 +1,6 @@
 import { errorResponse, HELD_FOR_REVIEW } from "../errors";
 import { jsonResponse, validationFailed, type ApiContext } from "../apiPipeline";
+import type { RedactionSummary } from "@/lib/safety/fields";
 import type { Actor } from "@/lib/services/caseService";
 
 export function actorOf(ctx: ApiContext): Actor {
@@ -30,7 +31,11 @@ export function failureResponse(error: string, detail?: Record<string, string>):
   }
 }
 
-/** 201 when the item is public; 202 with the held_for_review text when it was saved but is not public yet. */
-export function createdResponse(held: boolean, body: Record<string, unknown>): Response {
-  return held ? jsonResponse(202, { ...body, ...HELD_FOR_REVIEW }) : jsonResponse(201, body);
+/**
+ * 201 when the item is public; 202 with the held_for_review text when it was saved but is not public yet.
+ * When the gate removed anything, the body says how many and of which kinds (counts only, never the text).
+ */
+export function createdResponse(held: boolean, body: Record<string, unknown>, redactions?: RedactionSummary): Response {
+  const content = redactions && redactions.total > 0 ? { ...body, redactions } : body;
+  return held ? jsonResponse(202, { ...content, ...HELD_FOR_REVIEW }) : jsonResponse(201, content);
 }
