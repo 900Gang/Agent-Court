@@ -21,6 +21,8 @@ import {
   listCases,
   publishHeldCase,
   publishHeldEvidence,
+  rejectHeldCase,
+  rejectHeldEvidence,
   withdrawCase,
 } from "@/lib/services/caseService";
 import { eq } from "drizzle-orm";
@@ -734,5 +736,103 @@ describe("full field screening (AC-414, AC-411)", () => {
     const c = await insertCase(actor.agentId, { status: "open" });
     const result = unwrap(await addEvidence(t.db, passGate, actor, c.id, { kind: "trace", text: "step 1" }));
     expect(result.redactions).toEqual({ total: 0, types: {} });
+  });
+});
+
+describe("rejectHeldCase (AC-409)", () => {
+  it("rejects a held case and its held evidence, and leaves active evidence alone", async () => {
+    const { actor } = await makeAgent();
+    const c = await insertCase(actor.agentId, { status: "held" });
+    const heldEvidence = await insertEvidence(c.id, "held");
+    const activeEvidence = await insertEvidence(c.id, "active");
+    const rejected = unwrap(await rejectHeldCase(t.db, c.id));
+    expect(rejected.status).toBe("rejected");
+    expect(rejected.publishedAt).toBeNull();
+    const [held] = await t.db.select().from(evidenceTable).where(eq(evidenceTable.id, heldEvidence.id));
+    const [active] = await t.db.select().from(evidenceTable).where(eq(evidenceTable.id, activeEvidence.id));
+    expect(held.status).toBe("rejected");
+    expect(active.status).toBe("active");
+  });
+
+  it.each(["open", "argued", "resolved", "withdrawn", "closed_unresolved", "under_appeal", "rejected"] as const)(
+    "refuses a %s case and changes nothing",
+    async (status) => {
+      const { actor } = await makeAgent();
+      const c = await insertCase(actor.agentId, { status });
+      const e = await insertEvidence(c.id, "held");
+      expect(errorOf(await rejectHeldCase(t.db, c.id))).toBe("illegal_transition");
+      const [row] = await t.db.select().from(cases).where(eq(cases.id, c.id));
+      const [item] = await t.db.select().from(evidenceTable).where(eq(evidenceTable.id, e.id));
+      expect(row.status).toBe(status);
+      expect(item.status).toBe("held");
+    },
+  );
+
+  it("answers not_found for unknown ids and for ids that are not UUIDs", async () => {
+    expect(errorOf(await rejectHeldCase(t.db, crypto.randomUUID()))).toBe("not_found");
+    expect(errorOf(await rejectHeldCase(t.db, "not-a-uuid"))).toBe("not_found");
+  });
+
+  it("hides the rejected case from everyone, the filer included, in getCase and listCases", async () => {
+    const { actor } = await makeAgent();
+    const other = await makeAgent();
+    const tag = uniq("rejected-tag");
+    const c = await insertCase(actor.agentId, { status: "held", tags: [tag] });
+    unwrap(await rejectHeldCase(t.db, c.id));
+    expect(await getCase(t.db, actor.agentId, c.id)).toBeNull();
+    expect(await getCase(t.db, other.actor.agentId, c.id)).toBeNull();
+    for (const viewer of [actor.agentId, other.actor.agentId]) {
+      expect((await listCases(t.db, viewer, query({ tag }))).items).toEqual([]);
+    }
+  });
+
+  it("refuses the filer's own later actions on a rejected case", async () => {
+    const { actor } = await makeAgent();
+    const c = await insertCase(actor.agentId, { status: "held" });
+    unwrap(await rejectHeldCase(t.db, c.id));
+    expect(errorOf(await addEvidence(t.db, passGate, actor, c.id, { kind: "error", text: "boom" }))).toBe("not_found");
+    expect(errorOf(await withdrawCase(t.db, actor, c.id))).toBe("not_found");
+  });
+});
+
+describe("rejectHeldEvidence (AC-409)", () => {
+  it("rejects held evidence on a public case and leaves the case as it was", async () => {
+    const { actor } = await makeAgent();
+    const c = await insertCase(actor.agentId, { status: "open" });
+    const e = await insertEvidence(c.id, "held");
+    expect(unwrap(await rejectHeldEvidence(t.db, e.id)).status).toBe("rejected");
+    const [row] = await t.db.select().from(cases).where(eq(cases.id, c.id));
+    expect(row.status).toBe("open");
+  });
+
+  it("hides rejected evidence from other agents and still shows it to the filer", async () => {
+    const { actor } = await makeAgent();
+    const other = await makeAgent();
+    const c = await insertCase(actor.agentId, { status: "open" });
+    await insertEvidence(c.id, "active");
+    const e = await insertEvidence(c.id, "held");
+    unwrap(await rejectHeldEvidence(t.db, e.id));
+    expect((await getCase(t.db, other.actor.agentId, c.id))?.evidence.map((item) => item.status)).toEqual(["active"]);
+    expect((await getCase(t.db, actor.agentId, c.id))?.evidence.map((item) => item.status).sort()).toEqual(["active", "rejected"]);
+  });
+
+  it("refuses evidence that is active or already rejected, and evidence on a held case", async () => {
+    const { actor } = await makeAgent();
+    const open = await insertCase(actor.agentId, { status: "open" });
+    const held = await insertCase(actor.agentId, { status: "held" });
+    const active = await insertEvidence(open.id, "active");
+    const again = await insertEvidence(open.id, "held");
+    unwrap(await rejectHeldEvidence(t.db, again.id));
+    const onHeld = await insertEvidence(held.id, "held");
+    expect(errorOf(await rejectHeldEvidence(t.db, active.id))).toBe("illegal_transition");
+    expect(errorOf(await rejectHeldEvidence(t.db, again.id))).toBe("illegal_transition");
+    expect(errorOf(await rejectHeldEvidence(t.db, onHeld.id))).toBe("illegal_transition");
+    const [row] = await t.db.select().from(evidenceTable).where(eq(evidenceTable.id, onHeld.id));
+    expect(row.status).toBe("held");
+  });
+
+  it("answers not_found for unknown ids and for ids that are not UUIDs", async () => {
+    expect(errorOf(await rejectHeldEvidence(t.db, crypto.randomUUID()))).toBe("not_found");
+    expect(errorOf(await rejectHeldEvidence(t.db, "not-a-uuid"))).toBe("not_found");
   });
 });

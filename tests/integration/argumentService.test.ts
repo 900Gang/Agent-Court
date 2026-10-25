@@ -4,7 +4,13 @@ import { argumentsTable, cases } from "@/db/schema";
 import type { GateInput, SafetyGate } from "@/lib/safety/gate";
 import { createGate } from "@/lib/safety/engine";
 import { failClosedGate } from "@/lib/safety/stub";
-import { publishHeldArgument, submitArgument, withdrawArgument } from "@/lib/services/argumentService";
+import {
+  publishHeldArgument,
+  rejectHeldArgument,
+  submitArgument,
+  withdrawArgument,
+} from "@/lib/services/argumentService";
+import { getCase } from "@/lib/services/caseService";
 import { blockGate, passGate, throwingGate } from "../helpers/gates";
 import { createFixtures } from "../helpers/fixtures";
 import { createTestDb, type TestDb } from "../helpers/db";
@@ -410,5 +416,70 @@ describe("submitArgument: redaction summary (AC-414)", () => {
     const c = await f.insertCase(filer.actor.agentId, { status: "open" });
     const result = f.unwrap(await submitArgument(t.db, passGate, author.actor, c.id, fix));
     expect(result.redactions).toEqual({ total: 0, types: {} });
+  });
+});
+
+describe("rejectHeldArgument (AC-409)", () => {
+  it("rejects a held argument and leaves an open case open", async () => {
+    const filer = await f.makeAgent();
+    const author = await f.makeAgent();
+    const c = await f.insertCase(filer.actor.agentId, { status: "open" });
+    const { argument } = f.unwrap(await submitArgument(t.db, failClosedGate, author.actor, c.id, fix));
+    expect(f.unwrap(await rejectHeldArgument(t.db, argument.id)).status).toBe("rejected");
+    expect(await argumentStatusOf(argument.id)).toBe("rejected");
+    expect(await caseStatusOf(c.id)).toBe("open");
+  });
+
+  it("leaves an argued case argued", async () => {
+    const filer = await f.makeAgent();
+    const c = await f.insertCase(filer.actor.agentId, { status: "argued" });
+    await f.insertArgument(c.id, (await f.makeAgent()).actor.agentId, "active");
+    const held = await f.insertArgument(c.id, (await f.makeAgent()).actor.agentId, "held");
+    f.unwrap(await rejectHeldArgument(t.db, held.id));
+    expect(await caseStatusOf(c.id)).toBe("argued");
+  });
+
+  it("rejects a held argument even when its case has since been withdrawn", async () => {
+    const filer = await f.makeAgent();
+    const c = await f.insertCase(filer.actor.agentId, { status: "withdrawn" });
+    const held = await f.insertArgument(c.id, (await f.makeAgent()).actor.agentId, "held");
+    expect(f.unwrap(await rejectHeldArgument(t.db, held.id)).status).toBe("rejected");
+  });
+
+  it("frees the author's place, so the same agent can argue again", async () => {
+    const filer = await f.makeAgent();
+    const author = await f.makeAgent();
+    const c = await f.insertCase(filer.actor.agentId, { status: "open" });
+    const first = f.unwrap(await submitArgument(t.db, failClosedGate, author.actor, c.id, fix));
+    expect(f.errorOf(await submitArgument(t.db, passGate, author.actor, c.id, fix))).toBe("already_argued");
+    f.unwrap(await rejectHeldArgument(t.db, first.argument.id));
+    const second = f.unwrap(await submitArgument(t.db, passGate, author.actor, c.id, fix));
+    expect(second.argument.status).toBe("active");
+    expect(second.caseStatus).toBe("argued");
+  });
+
+  it.each(["active", "withdrawn", "won", "rejected"] as const)("refuses a %s argument and changes nothing", async (status) => {
+    const filer = await f.makeAgent();
+    const c = await f.insertCase(filer.actor.agentId, { status: "open" });
+    const a = await f.insertArgument(c.id, (await f.makeAgent()).actor.agentId, status);
+    expect(f.errorOf(await rejectHeldArgument(t.db, a.id))).toBe("illegal_transition");
+    expect(await argumentStatusOf(a.id)).toBe(status);
+  });
+
+  it("answers not_found for unknown ids and for ids that are not UUIDs", async () => {
+    expect(f.errorOf(await rejectHeldArgument(t.db, crypto.randomUUID()))).toBe("not_found");
+    expect(f.errorOf(await rejectHeldArgument(t.db, "not-a-uuid"))).toBe("not_found");
+  });
+
+  it("hides a rejected argument from other agents and still shows it to its author", async () => {
+    const filer = await f.makeAgent();
+    const author = await f.makeAgent();
+    const viewer = await f.makeAgent();
+    const c = await f.insertCase(filer.actor.agentId, { status: "open" });
+    const held = await f.insertArgument(c.id, author.actor.agentId, "held");
+    f.unwrap(await rejectHeldArgument(t.db, held.id));
+    expect((await getCase(t.db, viewer.actor.agentId, c.id))?.arguments).toEqual([]);
+    expect((await getCase(t.db, filer.actor.agentId, c.id))?.arguments).toEqual([]);
+    expect((await getCase(t.db, author.actor.agentId, c.id))?.arguments.map((entry) => entry.argument.status)).toEqual(["rejected"]);
   });
 });

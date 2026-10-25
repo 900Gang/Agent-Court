@@ -236,3 +236,37 @@ export async function publishHeldArgument(
     return ok(updated);
   });
 }
+
+/**
+ * Admin rejection of a held argument. It works whatever state the case is in, so a queue never keeps an orphan,
+ * and it never changes the case. The author's place is free again, because only held and active arguments count.
+ */
+export async function rejectHeldArgument(
+  db: Database,
+  argumentId: string,
+): Promise<ServiceResult<Argument, "not_found" | "illegal_transition">> {
+  type Result = ServiceResult<Argument, "not_found" | "illegal_transition">;
+  if (!UUID.test(argumentId)) return fail("not_found");
+  return db.transaction(async (tx): Promise<Result> => {
+    const [pre] = await tx.select().from(argumentsTable).where(eq(argumentsTable.id, argumentId)).limit(1);
+    if (!pre) return fail("not_found");
+
+    // Lock the case first, then the argument, as every other writer does.
+    const parent = await lockCase(tx, pre.caseId);
+    const [current] = await tx
+      .select()
+      .from(argumentsTable)
+      .where(eq(argumentsTable.id, argumentId))
+      .limit(1)
+      .for("update");
+    if (!parent || !current) return fail("not_found");
+    if (current.status !== "held") return fail("illegal_transition");
+
+    const [updated] = await tx
+      .update(argumentsTable)
+      .set({ status: "rejected" })
+      .where(eq(argumentsTable.id, argumentId))
+      .returning();
+    return ok(updated);
+  });
+}

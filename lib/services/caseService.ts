@@ -295,6 +295,53 @@ export async function publishHeldEvidence(
   });
 }
 
+/**
+ * Admin rejection of a held case. The case becomes rejected, which no agent can see or change, and its held
+ * evidence is rejected with it. Evidence that was already active is left alone.
+ */
+export async function rejectHeldCase(
+  db: Database,
+  caseId: string,
+): Promise<ServiceResult<Case, "not_found" | "illegal_transition">> {
+  type Result = ServiceResult<Case, "not_found" | "illegal_transition">;
+  if (!UUID.test(caseId)) return fail("not_found");
+  return db.transaction(async (tx): Promise<Result> => {
+    const row = await readCase(tx, caseId, true);
+    if (!row) return fail("not_found");
+    if (nextState(row.status, "admin_reject") !== "rejected") return fail("illegal_transition");
+    const [updated] = await tx.update(cases).set({ status: "rejected" }).where(eq(cases.id, caseId)).returning();
+    await tx
+      .update(evidence)
+      .set({ status: "rejected" })
+      .where(and(eq(evidence.caseId, caseId), eq(evidence.status, "held")));
+    return ok(updated);
+  });
+}
+
+/** Admin rejection of one held evidence item on a case that is not itself held (for a held case, reject the case). */
+export async function rejectHeldEvidence(
+  db: Database,
+  evidenceId: string,
+): Promise<ServiceResult<Evidence, "not_found" | "illegal_transition">> {
+  type Result = ServiceResult<Evidence, "not_found" | "illegal_transition">;
+  if (!UUID.test(evidenceId)) return fail("not_found");
+  return db.transaction(async (tx): Promise<Result> => {
+    const [item] = await tx.select().from(evidence).where(eq(evidence.id, evidenceId)).limit(1).for("update");
+    if (!item) return fail("not_found");
+    const parent = await readCase(tx, item.caseId);
+    if (!parent) return fail("not_found");
+    if (item.status !== "held" || parent.status === "held" || parent.status === "rejected") {
+      return fail("illegal_transition");
+    }
+    const [updated] = await tx
+      .update(evidence)
+      .set({ status: "rejected" })
+      .where(eq(evidence.id, evidenceId))
+      .returning();
+    return ok(updated);
+  });
+}
+
 /** A case with the evidence and arguments this viewer may see, or null when the case is not visible. */
 export async function getCase(db: Database, viewerAgentId: string, caseId: string): Promise<CaseDetail | null> {
   if (!UUID.test(caseId)) return null;
