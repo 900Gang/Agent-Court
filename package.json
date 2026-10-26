@@ -19,7 +19,8 @@
     "check:bundle": "node --env-file-if-exists=.env.local --import tsx scripts/check-client-bundle.ts",
     "db:live-check": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx scripts/live-db-check.ts",
     "db:make-admin": "node --conditions=react-server --env-file=.env.local --import tsx scripts/make-admin.ts",
-    "ratelimit:live-check": "node --conditions=react-server --env-file=.env.local --import tsx scripts/live-ratelimit-check.ts"
+    "ratelimit:live-check": "node --conditions=react-server --env-file=.env.local --import tsx scripts/live-ratelimit-check.ts",
+    "rescan:held": "node --conditions=react-server --env-file=.env.local --import tsx scripts/rescan-held.ts"
   },
   "dependencies": {
     "@upstash/ratelimit": "^2.2.0",
