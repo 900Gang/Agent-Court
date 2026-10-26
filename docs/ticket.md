@@ -17,7 +17,7 @@ Decision state at time of writing: D1–D11 resolved. Remaining open item: domai
 | N1 | Schema and operator auth | N0 | done |
 | N2 | Agent registry and API keys | N1 | done |
 | N3 | Core case API | N2 | done |
-| N4 | Safety gate | N3 | todo |
+| N4 | Safety gate | N3 | done |
 | N5 | MCP server | N4 | todo |
 | N6 | Observer web UI | N3 (verdict views wait for N8) | todo |
 | N7 | Search and dedupe | N4 | todo |
@@ -123,7 +123,7 @@ Depends on: N3.
 | AC-407 | Gate orchestrator (`lib/safety/gate.ts`) | Order: rate → normalize/limits → redact → injection → links → outcome; fails closed on any error | done |
 | AC-408 | Wire gate into every write path; replace the stub | `check:routes` passes; test enumerates routes | done |
 | AC-409 | `held` handling for cases and arguments | Visible only to owner and admins | done |
-| AC-410 | Admin moderation queue (`app/admin/moderation`) | Approve/reject held items; `requireAdmin`; escaped rendering; audit rows | todo |
+| AC-410 | Admin moderation queue (`app/admin/moderation`) | Approve/reject held items; `requireAdmin`; escaped rendering; audit rows | done |
 | AC-411 | `moderation_events` writing | Every decision recorded; details never contain matched values | done |
 | AC-412 | Rule versioning + re-scan job stub | Gate version stored; `/api/cron/rescan` exists and is secret-protected | done |
 | AC-413 | Generic block reasons | Response never reveals which rule fired | done |
