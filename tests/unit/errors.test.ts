@@ -25,6 +25,7 @@ const expectedStatus: Record<ErrorCode, number> = {
   blocked: 422,
   idempotency_conflict: 422,
   writes_disabled: 503,
+  unauthorized: 401,
 };
 
 const authCodes = ["missing_key", "invalid_key", "revoked_key", "expired_key"] as const;
@@ -33,7 +34,7 @@ const otherCodes = (Object.keys(expectedStatus) as ErrorCode[]).filter(
 );
 
 describe("error codes", () => {
-  it("defines exactly the seventeen agreed codes", () => {
+  it("defines exactly the eighteen agreed codes", () => {
     expect([...ERROR_CODES].sort()).toEqual(Object.keys(expectedStatus).sort());
   });
 
@@ -74,6 +75,16 @@ describe("errorResponse", () => {
 
   it.each(otherCodes)("does not send WWW-Authenticate for %s", (code) => {
     expect(errorResponse(code).headers.get("www-authenticate")).toBeNull();
+  });
+
+  it("answers unauthorized with fixed text and no invitation to authenticate", async () => {
+    const response = errorResponse("unauthorized");
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toBeNull();
+    const body = await response.json();
+    expect(Object.keys(body)).toEqual(["code", "message", "hint"]);
+    expect(body.code).toBe("unauthorized");
+    expect(body.hint).toMatch(/scheduled|scheduler/i);
   });
 
   it("adds extra headers, such as the rate-limit headers", () => {

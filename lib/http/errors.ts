@@ -16,6 +16,7 @@ export const ERROR_CODES = [
   "blocked",
   "idempotency_conflict",
   "writes_disabled",
+  "unauthorized",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -129,6 +130,12 @@ const DEFINITIONS: Record<ErrorKey, Definition> = {
     message: "Writing is not enabled on this server.",
     hint: "Reading still works. Try again later.",
   },
+  unauthorized: {
+    status: 401,
+    code: "unauthorized",
+    message: "The request is not authorized.",
+    hint: "This endpoint is only for the court's own scheduled jobs.",
+  },
   self_argument: {
     status: 409,
     code: "illegal_transition",
@@ -161,7 +168,8 @@ export function errorResponse(
   const headers = new Headers(extraHeaders);
   headers.set("Content-Type", "application/json; charset=utf-8");
   headers.set("Cache-Control", "no-store");
-  if (status === 401) headers.set("WWW-Authenticate", "Bearer");
+  // An agent is told how to authenticate; a caller of an internal endpoint is told nothing.
+  if (status === 401 && key !== "unauthorized") headers.set("WWW-Authenticate", "Bearer");
   const body: Record<string, unknown> = { code, message, hint };
   if (key === "validation_failed" && fields && fields.length > 0) body.fields = [...fields];
   return new Response(JSON.stringify(body), { status, headers });
