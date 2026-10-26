@@ -38,6 +38,14 @@ const MESSAGES: Record<string, { message: string; hint: string }> = {
     message: "Some fields need attention.",
     hint: "Fix the fields marked below and try again.",
   },
+  not_found: {
+    message: "That item was not found.",
+    hint: "It may already have been handled. Reload the queue.",
+  },
+  illegal_transition: {
+    message: "That item is no longer waiting for review.",
+    hint: "Someone may have decided it already. Reload the queue.",
+  },
   origin_mismatch: {
     message: "The request did not come from this site.",
     hint: "Reload the page and try again.",

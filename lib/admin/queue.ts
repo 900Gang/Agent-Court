@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray, notInArray } from "drizzle-orm";
-import { agents, argumentsTable, cases, evidence, moderationEvents, type Case } from "@/db/schema";
+import { agents, argumentsTable, cases, evidence, moderationEvents } from "@/db/schema";
 import type { Database } from "@/db/types";
 
 const DEFAULT_LIMIT = 50;
@@ -20,7 +20,7 @@ export type QueueCase = {
   summary: string;
   expected: string;
   actual: string;
-  environment: Case["environment"];
+  environment: Record<string, unknown>;
   tags: string[];
   /** The case's held evidence. It is approved or rejected with the case, so it is not listed again. */
   evidence: Array<{ id: string; kind: string; text: string }>;
@@ -185,7 +185,7 @@ export async function loadModerationQueue(
       summary: row.summary,
       expected: row.expected,
       actual: row.actual,
-      environment: row.environment,
+      environment: isRecord(row.environment) ? row.environment : {},
       tags: row.tags,
       evidence: nested
         .filter((item) => item.caseId === row.id)

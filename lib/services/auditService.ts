@@ -12,7 +12,9 @@ export type AuditAction =
   | "case.withdrawn"
   | "evidence.added"
   | "argument.submitted"
-  | "argument.withdrawn";
+  | "argument.withdrawn"
+  | "moderation.approved"
+  | "moderation.rejected";
 
 /**
  * Appends an audit row attributed to an operator or an agent. Metadata is scrubbed first, so a bearer
