@@ -38,6 +38,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      - name: No write path skips the safety gate
+        run: pnpm check:routes
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build

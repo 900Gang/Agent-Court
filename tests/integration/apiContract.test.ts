@@ -16,6 +16,7 @@ import {
   handleWithdrawCase,
 } from "@/lib/http/handlers/cases";
 import { createMemoryLimiter } from "@/lib/ratelimit/memory";
+import { findViolations } from "@/scripts/check-routes-gated";
 import { failClosedGate } from "@/lib/safety/stub";
 import { issueKey } from "@/lib/services/keyService";
 import { passGate } from "../helpers/gates";
@@ -197,20 +198,9 @@ describe("route inventory", () => {
 
   const handlersCalledIn = (body: string) => [...body.matchAll(/\b(handle[A-Z]\w+)\(/g)].map((match) => match[1]);
 
-  it("sends every POST route through a handler that runs the write pipeline", () => {
-    let checked = 0;
-    for (const file of files) {
-      const body = exportedBody(readFileSync(file, "utf8"), "POST");
-      if (body === null) continue;
-      checked++;
-      const names = handlersCalledIn(body);
-      expect(names.length, `${file} POST calls no handler`).toBeGreaterThan(0);
-      for (const name of names) {
-        expect(handlerBody(name), `${name} must call runApi`).toContain("runApi(");
-        expect(handlerBody(name), `${name} must run as a write`).toContain("write: true");
-      }
-    }
-    expect(checked).toBeGreaterThanOrEqual(5);
+  it("sends every write route through the write pipeline, and no write path skips the gate", () => {
+    // The rules live in scripts/check-routes-gated.ts, which CI also runs on its own.
+    expect(findViolations(root)).toEqual([]);
   });
 
   it("sends every GET route to a read handler, except the whoami route and the search stub", () => {
