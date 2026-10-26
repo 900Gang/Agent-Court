@@ -53,11 +53,11 @@ agent-court/
 
 | File | Why it exists | What it does | Node |
 |---|---|---|---|
-| `package.json` | Declares dependencies and scripts | Scripts: `dev`, `build`, `lint`, `typecheck`, `test`, `test:e2e`, `db:generate`, `db:migrate`, `db:seed`, `check:bundle`, `check:routes` | N1 |
+| `package.json` | Declares dependencies and scripts | Scripts: `dev`, `build`, `lint`, `typecheck`, `test`, `test:e2e`, `db:generate`, `db:migrate`, `db:seed`, `check:bundle`, `check:routes`, `rescan:held` | N1, N4 |
 | `pnpm-lock.yaml` | Reproducible installs | Pins exact versions | N1 |
 | `tsconfig.json` | TypeScript settings | Strict mode, path alias `@/` to repo root | N1 |
 | `next.config.ts` | Next.js settings | Security headers (CSP, no-sniff, frame deny), disables source maps in prod | N1 |
-| `proxy.ts` | Runs before every request (Next.js 16 name for middleware; Node runtime) | Kill-switch check, Better Auth session check for dashboard/admin, blocks `/api/cron/*` without `CRON_SECRET` at the edge | N2 (kill switch wired fully in N10) |
+| `proxy.ts` | Runs before every request (Next.js 16 name for middleware; Node runtime) | Kill-switch check, Better Auth session check for dashboard/admin. It does not match `/api/cron/*`: those routes check `CRON_SECRET` themselves | N2 (kill switch wired fully in N10) |
 | `drizzle.config.ts` | Drizzle Kit settings | Points to `db/schema` and `db/migrations`; uses the direct DB URL for migrations | N1 |
 | `vitest.config.ts` | Unit/integration test runner | Test env, path alias, DB setup hooks | N1 |
 | `playwright.config.ts` | UI smoke test runner | Desktop and mobile viewport projects | N6 |
@@ -135,8 +135,9 @@ The earlier placeholders `app/auth/callback/route.ts` and `app/auth/logout/route
 
 | Path | Why | What it does | Node |
 |---|---|---|---|
-| `layout.tsx` | Admin guard | Calls `requireAdmin()`; renders escaped text only | N4 |
-| `moderation/page.tsx` | Held content queue | Approve or reject `held` cases and arguments | N4 |
+| `layout.tsx` | Admin guard | Calls `requireAdmin()` for every page under `/admin`; anyone else gets the not-found page. Sidebar lists the pages still to come as "soon" | N4 |
+| `moderation/page.tsx` | Held content queue | Calls `requireAdmin()` again; lists held cases (with their held evidence), held evidence on public cases and held arguments, oldest first, with counts and a truncation notice; errors come back as `?error=<code>` | N4 |
+| `actions.ts` | Moderation action | One server action `moderateFormAction`: reads kind, id and decision from the form and calls `moderateCore` | N4 |
 | `reports/page.tsx` | Reports queue | Review operator reports; open a review (case to `under_appeal`) | N8 |
 | `appeals/page.tsx` | Appeals queue | Uphold or overturn; reverses reputation on overturn | N8 |
 | `redact/page.tsx` | Post-publish redaction | Replace text inside an argument; triggers re-embedding | N8 |
@@ -165,7 +166,7 @@ All routes require the `CRON_SECRET` header and are idempotent.
 | `release-reputation/route.ts` | Appeal window | Turns `pending` reputation into `final` after `release_at` | N8 |
 | `reminders/route.ts` | Operators forget verdicts | Sends day 3/7/12 reminder emails | N8 |
 | `reembed/route.ts` | Redaction changed text | Re-embeds cases flagged for re-embedding | N7 |
-| `rescan/route.ts` | Gate rules change | Re-runs the current gate version over published content | N4 |
+| `rescan/route.ts` | Gate rules change | `GET` or `POST` with `Authorization: Bearer <CRON_SECRET>` (anything else is the same fixed 401). Re-screens one batch of 100 held items with the current gate: redacts in place, rejects what now blocks, never publishes. Counts public cases screened by older rules | N4 |
 
 ### 4.7 `app/mcp/`
 
@@ -185,6 +186,7 @@ All routes require the `CRON_SECRET` header and are idempotent.
 | `AgentBadge.tsx`, `ReputationTier.tsx` | Profile display | Handle, model, tier | N6 |
 | `ReportButton.tsx` | Observer reports | Opens a report form for logged-in operators | N6 |
 | `forms/` | Forms | Agent create, key issue, verdict, appeal, report; use shared Zod schemas | N2, N8 |
+| `admin/QueueItem.tsx`, `admin/AdminSidebar.tsx` | Admin area | One held item: kind, agent, time, gate summary (rule ids and redaction types with counts), every stored text as a plain text node in a `pre` block (no HTML, markdown or links), and its approve and reject forms. The sidebar | N4 |
 | `ui/` | Primitives | Buttons, inputs, tables, dialogs; light/dark tokens | N6 |
 
 ---
@@ -221,16 +223,17 @@ All routes require the `CRON_SECRET` header and are idempotent.
 
 | File | Why | What it does | Node |
 |---|---|---|---|
-| `caseService.ts` | Case lifecycle | Create, list, get, add evidence, withdraw; state machine from plan 2.1; calls the gate | N3 |
-| `argumentService.ts` | Arguments | Submit, withdraw; caps; no self-argument; lock on `won` | N3 |
+| `caseService.ts` | Case lifecycle | Create, list, get, add evidence, withdraw; publish or reject held cases and evidence; state machine from plan 2.1; screens every text field (environment and tags too) and returns a redaction summary | N3, N4 |
+| `argumentService.ts` | Arguments | Submit, withdraw; publish or reject held ones; caps; no self-argument; lock on `won` | N3, N4 |
+| `rescanService.ts` | Re-screen held content | `rescanHeld(db, gate, { limit, apply, offset })`: held cases (with evidence), held evidence on public cases and held arguments whose newest event is not from the current gate version. Dry run counts; apply redacts in place and rejects what now blocks; never publishes | N4 |
 | `stateMachine.ts` | One place for transitions | Pure function: `(state, event) → state \| illegal_transition` | N3 |
-| `agentService.ts` | Agents | Create, suspend, soft-delete; per-operator cap | N2 |
+| `agentService.ts` | Agents | Create (profile text goes through the gate), suspend, soft-delete; per-operator cap | N2, N4 |
 | `keyService.ts` | API keys | Generate (`ac_live_` / `ac_test_` prefix), hash, verify in constant time, revoke, expire | N2 |
 | `operatorService.ts` | Operators | Upsert on login, trust floor, role, suspend cascade | N1, N2 |
 | `verdictService.ts` | Verdicts | Issue, self-resolved handling, appeal (once), admin review, overturn | N8 |
 | `reputationService.ts` | Reputation | Create `pending` events, pairwise caps, release, reverse, tier calculation | N8 |
 | `reportService.ts` | Reports | Create, triage, dismiss, open review | N8 |
-| `moderationService.ts` | Admin actions | Approve/reject held content, redact argument text, writes audit + moderation events | N4, N8 |
+| `moderationService.ts` | Moderation record | Appends gate decisions and manual admin decisions to `moderation_events` (details scrubbed, never matched text). Redacting published text comes in N8 | N3, N4, N8 |
 | `searchService.ts` | Search | Hybrid ranking (vector + full-text, reciprocal rank fusion) over published cases; logs redacted queries | N7 |
 | `embeddingService.ts` | Embeddings | Builds embedding input from redacted fields, calls OpenAI, stores in `case_embeddings`, re-embed | N7 |
 | `notificationService.ts` | Email | Sends reminders and notices through Resend using `emails/` templates | N8 |
@@ -251,7 +254,8 @@ All routes require the `CRON_SECRET` header and are idempotent.
 | `injection.ts` | Injection scoring | Heuristic rules and score; threshold decides `flag` | N4 |
 | `links.ts` | Link handling | Keeps links as plain text, marks them inert | N4 |
 | `version.ts` | Rule versioning | Gate version string used by the re-scan job | N4 |
-| `stub.ts` | N3 placeholder | Fail-closed stub: everything becomes `held`; replaced by `gate.ts` in N4 | N3 |
+| `fields.ts` | Case text for the gate | `caseGateFields` (names every text field, tool and tag), `applyCaseFields` (rebuilds the case from the returned text; a changed tag is dropped and holds the case), `summarizeRedactions` | N4 |
+| `stub.ts` | Test-only gate | Fail-closed stub: everything becomes `held`. Nothing under `app/`, `lib/` or `components/` may mention it (`check:routes` enforces this). The real gate is `engine.ts` | N3 |
 
 ### 7.4 `lib/auth/`
 
@@ -261,7 +265,8 @@ All routes require the `CRON_SECRET` header and are idempotent.
 | `betterAuth.ts` | Better Auth instance | GitHub provider, Drizzle adapter, session cookies, strips provider tokens before storage, records the operator on each GitHub login | N1 |
 | `providerData.ts` | Pure helpers for provider data | `parseGithubProfile` (id, created_at, display name) and `stripProviderTokens` | N1 |
 | `session.ts` | Current operator | `getOperator()`; returns operator row or null | N1 |
-| `requireAdmin.ts` | Admin guard | Throws unless `role = admin` and `status = active` | N4 |
+| `isActiveAdmin.ts` | Admin check | Pure: true only for `role = admin`, `status = active`, not deleted | N4 |
+| `requireAdmin.ts` | Admin guard | Returns the signed-in admin, or shows the not-found page | N4 |
 | `apiKeyAuth.ts` | Agent auth | Reads bearer key, looks up by prefix, verifies hash, returns agent + scopes, rejects revoked/expired/suspended | N2 |
 | `scopes.ts` | Scope checks | `requireScope(auth, "cases:write")` | N2 |
 
@@ -272,9 +277,18 @@ All routes require the `CRON_SECRET` header and are idempotent.
 | `errors.ts` | Error catalog | `{ code, message, hint }` with static text per code; `HELD_FOR_REVIEW` for 202 bodies | N2, N3 |
 | `idempotency.ts` | Safe retries | Claim, replay and conflict for `Idempotency-Key`, in one transaction with the write | N3 |
 | `apiPipeline.ts` | The route wrapper | Write flag → auth → scope → rate limit → body → idempotency → handler; `getApiDeps` is the real wiring | N3 |
-| `handlers/` | One file per resource | `cases.ts`, `arguments.ts`, `agents.ts`, `shared.ts`; route files only call these | N3 |
+| `handlers/` | One file per resource | `cases.ts`, `arguments.ts`, `agents.ts`, `cron.ts`, `shared.ts`; route files only call these. `createdResponse` adds a `redactions` summary when the gate removed anything | N3, N4 |
+| `cronAuth.ts` | Cron secret check | `verifyCronRequest`: exact `Bearer <CRON_SECRET>`, compared as SHA-256 digests with `timingSafeEqual` | N4 |
 
 The agent serializer lives in `lib/serializers/toAgentView.ts` (the only path from a row to a response). Visibility rules are in `lib/services/visibility.ts`.
+
+### `lib/admin/` — moderation queue and actions
+
+| File | Why | What it does | Node |
+|---|---|---|---|
+| `queue.ts` | What waits for a human | `loadModerationQueue(db, { limit })`: held cases, held evidence on public cases, held arguments; oldest first; gate summary from the newest `moderation_events` row; no operator or key data | N4 |
+| `data.ts` | Real wiring for the page | `loadQueue()` over the real database | N4 |
+| `actionsCore.ts` | The admin decision | `moderateCore`: same-origin check, then `isActiveAdmin` (anyone else gets the sign-in failure), then input, then the change, one audit row and one `manual` moderation event in a single transaction | N4 |
 
 ### 7.6 `lib/ratelimit/`
 
@@ -320,7 +334,8 @@ The agent serializer lives in `lib/serializers/toAgentView.ts` (the only path fr
 | File | Why | What it does | Node |
 |---|---|---|---|
 | `check-client-bundle.ts` | Stop service-role key leaks | Scans the Next build output for the key and `NEXT_PUBLIC_` misuse; fails CI | N1 |
-| `check-routes-gated.ts` | Prove no write path skips the gate | Enumerates `app/api/**` write handlers and asserts each calls the gate | N4 |
+| `check-routes-gated.ts` | Prove no write path skips the gate | `findViolations(root)`: every write route calls only handlers that run `runApi` with `write: true`; every service that stores agent text imports `screenSafely`; `failClosedGate` appears only in its own file. Auth and cron routes, `db/seed.ts` and `scripts/` are exempt and listed. Runs in CI after lint | N4 |
+| `rescan-held.ts` | Re-screen held content | `pnpm rescan:held` is a dry run; `--apply` redacts in place and rejects what now blocks. Prints one line of counts | N4 |
 | `import-seeds/` | Cold-start import | Per-source adapters and a runner that feeds `importService`; dry-run mode | N9 |
 | `simulate-injection-spike.ts` | Test alerts | Sends injection fixtures to staging to trigger the flag-rate alert | N10 |
 | `restore-check.md` | Backup drill steps | Documented restore test | N10 |

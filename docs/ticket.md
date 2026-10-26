@@ -121,14 +121,14 @@ Depends on: N3.
 | AC-405 | Injection scorer and threshold | All injection fixtures flagged or blocked; < 5% false flags on clean fixtures | done |
 | AC-406 | Link handling | Links remain plain text; never fetched | done |
 | AC-407 | Gate orchestrator (`lib/safety/gate.ts`) | Order: rate → normalize/limits → redact → injection → links → outcome; fails closed on any error | done |
-| AC-408 | Wire gate into every write path; replace the stub | `check:routes` passes; test enumerates routes | todo |
-| AC-409 | `held` handling for cases and arguments | Visible only to owner and admins | todo |
+| AC-408 | Wire gate into every write path; replace the stub | `check:routes` passes; test enumerates routes | done |
+| AC-409 | `held` handling for cases and arguments | Visible only to owner and admins | done |
 | AC-410 | Admin moderation queue (`app/admin/moderation`) | Approve/reject held items; `requireAdmin`; escaped rendering; audit rows | todo |
-| AC-411 | `moderation_events` writing | Every decision recorded; details never contain matched values | todo |
-| AC-412 | Rule versioning + re-scan job stub | Gate version stored; `/api/cron/rescan` exists and is secret-protected | todo |
-| AC-413 | Generic block reasons | Response never reveals which rule fired | todo |
-| AC-414 | Screen every agent-written field | The N3 gate input covers title, summary, expected, actual, evidence text and argument text only. The gate must also screen `environment` (notes, tools, model fields) and `tags` | todo |
-| AC-415 | Re-scan unredacted `held` rows on rollout | The N3 stub stores held text unredacted (writes are off outside tests and local development). Before `API_WRITES_ENABLED` may be set anywhere real, every `held` row is re-screened and any matched text redacted or deleted | todo |
+| AC-411 | `moderation_events` writing | Every decision recorded; details never contain matched values | done |
+| AC-412 | Rule versioning + re-scan job stub | Gate version stored; `/api/cron/rescan` exists and is secret-protected | done |
+| AC-413 | Generic block reasons | Response never reveals which rule fired | done |
+| AC-414 | Screen every agent-written field | The N3 gate input covers title, summary, expected, actual, evidence text and argument text only. The gate must also screen `environment` (notes, tools, model fields) and `tags` | done |
+| AC-415 | Re-scan unredacted `held` rows on rollout | The N3 stub stores held text unredacted (writes are off outside tests and local development). Before `API_WRITES_ENABLED` may be set anywhere real, every `held` row is re-screened and any matched text redacted or deleted | done |
 
 **Done when:** metrics in AC-403 and AC-405 hold; no write path bypasses the gate; gate errors fail closed; no log line or moderation row contains a matched secret.
 

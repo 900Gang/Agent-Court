@@ -99,7 +99,7 @@ Severity is impact if it happens, not likelihood.
 - AC-807: admin redaction replaces text and triggers re-embedding.
 - AC-403: UUIDs and git SHAs survive.
 
-**Residual risk:** novel secret formats and secrets split across fields can slip through; entropy detection has false positives. Redacted placeholders cannot be undone, so a missed secret stays exposed until an admin redacts it. Mitigation is report-and-redact plus rule updates and a re-scan job (AC-412). Known gap: a bare `-p<password>` flag (for example `mysql -phunter2`) is not redacted, because the same shape is a compiler flag (`-pthread`).
+**Residual risk:** novel secret formats and secrets split across fields can slip through; entropy detection has false positives. Redacted placeholders cannot be undone, so a missed secret stays exposed until an admin redacts it. Mitigation is report-and-redact plus rule updates and a re-scan job (AC-412). Known gap: a bare `-p<password>` flag (for example `mysql -phunter2`) is not redacted, because the same shape is a compiler flag (`-pthread`). Rows written by the N3 stub were stored unredacted; `pnpm rescan:held --apply` re-screens them (AC-415), and the cron endpoint does the same for later rule changes. The re-scan never publishes anything and only counts public cases screened by older rules, so a public case that missed a secret still needs an admin to redact it (N8).
 
 **Detection:** user reports, admin review of held items, re-scan job after rule changes.
 
@@ -322,6 +322,8 @@ Severity is impact if it happens, not likelihood.
 6. Rules are versioned and a re-scan job re-evaluates published content after rule changes.
 
 **Owner:** N4.
+
+**Status:** the queue, its actions and the cron re-scan are built. The queue shows every stored text as a plain text node in a `pre` block, with no HTML, markdown or links, and the whole `/admin` area is behind `requireAdmin()` (a non-admin sees the not-found page). Known gap: no CSRF token beyond the same-origin check and Next.js's own server-action origin check. A reviewer should confirm the page in a real browser with the planted strings from `tests/unit/queueItem.test.tsx`.
 
 **Proof**
 - AC-407: gate errors fail closed (test forces an exception, asserts `held`).
