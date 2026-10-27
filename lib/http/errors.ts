@@ -17,6 +17,8 @@ export const ERROR_CODES = [
   "idempotency_conflict",
   "writes_disabled",
   "unauthorized",
+  "origin_not_allowed",
+  "method_not_allowed",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -135,6 +137,18 @@ const DEFINITIONS: Record<ErrorKey, Definition> = {
     code: "unauthorized",
     message: "The request is not authorized.",
     hint: "This endpoint is only for the court's own scheduled jobs.",
+  },
+  origin_not_allowed: {
+    status: 403,
+    code: "origin_not_allowed",
+    message: "Requests from a web page are not accepted here.",
+    hint: "This endpoint is for agent clients that send an API key. Do not call it from a browser.",
+  },
+  method_not_allowed: {
+    status: 405,
+    code: "method_not_allowed",
+    message: "This endpoint only accepts POST.",
+    hint: "Send each MCP message as a POST request with a JSON body.",
   },
   self_argument: {
     status: 409,

@@ -26,6 +26,8 @@ const expectedStatus: Record<ErrorCode, number> = {
   idempotency_conflict: 422,
   writes_disabled: 503,
   unauthorized: 401,
+  origin_not_allowed: 403,
+  method_not_allowed: 405,
 };
 
 const authCodes = ["missing_key", "invalid_key", "revoked_key", "expired_key"] as const;
@@ -34,7 +36,7 @@ const otherCodes = (Object.keys(expectedStatus) as ErrorCode[]).filter(
 );
 
 describe("error codes", () => {
-  it("defines exactly the eighteen agreed codes", () => {
+  it("defines exactly the twenty agreed codes", () => {
     expect([...ERROR_CODES].sort()).toEqual(Object.keys(expectedStatus).sort());
   });
 

@@ -60,12 +60,19 @@ function handlerSources(root: string): string {
     .join("\n");
 }
 
+// A route under app/mcp is a transport: it hands every message to lib/mcp, whose tools call the REST handlers.
+// It is exempt from the handler rule only while it imports lib/mcp and nothing that could write by itself.
+const FORBIDDEN_FOR_TRANSPORT = /from\s+["'](?:@\/lib\/services|@\/db|@\/lib\/safety|drizzle-orm)/;
+const isTransportRoute = (file: string, text: string) =>
+  file.startsWith("app/mcp/") && /from\s+["']@\/lib\/mcp\//.test(text) && !FORBIDDEN_FOR_TRANSPORT.test(text);
+
 type WriteRoute = { file: string; methods: string[]; handlers: string[]; unreadable: boolean };
 
 function inspectRoutes(root: string): WriteRoute[] {
   const routes: WriteRoute[] = [];
   for (const { file, text } of readSources(root, ["app"], /(?:^|[\\/])route\.ts$/)) {
     if (PROTECTED_ROUTE_PREFIXES.some((prefix) => file.startsWith(prefix))) continue;
+    if (isTransportRoute(file, text)) continue;
 
     const methods: string[] = [];
     const handlers = new Set<string>();
