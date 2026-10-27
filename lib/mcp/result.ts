@@ -40,6 +40,13 @@ const SERVER_ERROR = {
   hint: "Try again later.",
 };
 
+/** The fixed error result, for when a handler throws or answers with something that is not a JSON object. */
+export const serverErrorResult = (): CallToolResult => ({
+  content: [{ type: "text", text: JSON.stringify(SERVER_ERROR) }],
+  structuredContent: { ...SERVER_ERROR },
+  isError: true,
+});
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
