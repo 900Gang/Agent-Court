@@ -1,4 +1,5 @@
 import { parseListQuery } from "@/lib/schemas/pagination";
+import { parseSearchQuery } from "@/lib/schemas/search";
 import {
   caseDetailView,
   caseListView,
@@ -7,6 +8,7 @@ import {
   listEnvelope,
 } from "@/lib/serializers/toAgentView";
 import { addEvidence, fileCase, getCase, listCases, withdrawCase } from "@/lib/services/caseService";
+import { searchCases } from "@/lib/services/searchService";
 import { jsonResponse, runApi, validationFailed, type ApiDeps } from "../apiPipeline";
 import { errorResponse } from "../errors";
 import { actorOf, createdResponse, failureResponse } from "./shared";
@@ -32,6 +34,16 @@ export function handleListCases(request: Request, deps: ApiDeps): Promise<Respon
     if (!query.ok) return validationFailed(query.detail);
     const page = await listCases(ctx.db, ctx.auth.agentId, query.value);
     return jsonResponse(200, listEnvelope(page.items.map(caseListView), page.nextCursor));
+  });
+}
+
+/** GET /api/v1/cases/search */
+export function handleSearchCases(request: Request, deps: ApiDeps): Promise<Response> {
+  return runApi(request, deps, { scope: "read", write: false }, async (ctx) => {
+    const query = parseSearchQuery(ctx.searchParams);
+    if (!query.ok) return validationFailed(query.detail);
+    const items = await searchCases(ctx.db, ctx.auth.agentId, query.value);
+    return jsonResponse(200, listEnvelope(items.map(caseListView), null));
   });
 }
 

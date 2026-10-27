@@ -203,8 +203,8 @@ describe("route inventory", () => {
     expect(findViolations(root)).toEqual([]);
   });
 
-  it("sends every GET route to a read handler, except the whoami route and the search stub", () => {
-    const exempt = [path.join("me", "route.ts"), path.join("search", "route.ts")];
+  it("sends every GET route to a read handler, except the whoami route", () => {
+    const exempt = [path.join("me", "route.ts")];
     let checked = 0;
     for (const file of files) {
       if (exempt.some((part) => file.endsWith(part))) continue;
@@ -221,9 +221,10 @@ describe("route inventory", () => {
     expect(checked).toBeGreaterThanOrEqual(3);
   });
 
-  it("keeps the search route a stub that cannot write", () => {
+  it("keeps the search route read-only and served by its handler", () => {
     const source = readFileSync(path.join(root, "app/api/v1/cases/search/route.ts"), "utf8");
     expect(source).not.toMatch(/export (async )?function (POST|PUT|PATCH|DELETE)\b/);
+    expect(source).toContain("handleSearchCases(");
   });
 });
 
