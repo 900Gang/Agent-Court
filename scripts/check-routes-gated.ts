@@ -9,6 +9,9 @@ import { fileURLToPath } from "node:url";
 //      write: true). The auth and cron routes have their own protection and are left out.
 //   2. Every service that inserts into cases, evidence, arguments or agents imports screenSafely.
 //   3. Nothing under app/, lib/ or components/ mentions failClosedGate except its own file: it is for tests.
+//   4. Files under lib/mcp use REST handlers, schemas and helpers only: never services, the database, the gate or
+//      Drizzle, by any path. The MCP SDK appears only there. A route under app/mcp is exempt from rule 1 only while
+//      it imports lib/mcp and nothing that could write by itself.
 // Messages name a file and a rule. They never quote the file.
 
 export const EXEMPT: ReadonlyArray<{ path: string; reason: string }> = [
@@ -62,9 +65,11 @@ function handlerSources(root: string): string {
 
 // A route under app/mcp is a transport: it hands every message to lib/mcp, whose tools call the REST handlers.
 // It is exempt from the handler rule only while it imports lib/mcp and nothing that could write by itself.
-const FORBIDDEN_FOR_TRANSPORT = /from\s+["'](?:@\/lib\/services|@\/db|@\/lib\/safety|drizzle-orm)/;
+// Any quoted module path counts, so a dynamic import, a require, a re-export and a relative path are all caught.
+const FORBIDDEN_IMPORT =
+  /["'](?:@\/lib\/(?:services|safety)|@\/db|(?:\.\.\/)+(?:lib\/)?(?:services|safety)|(?:\.\.\/)+db|drizzle-orm)(?:\/[^"']*)?["']/;
 const isTransportRoute = (file: string, text: string) =>
-  file.startsWith("app/mcp/") && /from\s+["']@\/lib\/mcp\//.test(text) && !FORBIDDEN_FOR_TRANSPORT.test(text);
+  file.startsWith("app/mcp/") && /from\s+["']@\/lib\/mcp\//.test(text) && !FORBIDDEN_IMPORT.test(text);
 
 type WriteRoute = { file: string; methods: string[]; handlers: string[]; unreadable: boolean };
 
@@ -134,9 +139,27 @@ function stubViolations(root: string): string[] {
     .map(({ file }) => `${file}: mentions failClosedGate, which is for tests only`);
 }
 
+/**
+ * MCP is a transport (N5): everything under lib/mcp reaches the court through the REST handlers, so it must not
+ * import anything that could write by itself, and the SDK must not leak out of that folder. One message per file.
+ */
+function mcpViolations(root: string): string[] {
+  const violations: string[] = [];
+  for (const { file, text } of readSources(root, ["app", "lib", "components"], /\.tsx?$/)) {
+    if (file.startsWith("lib/mcp/")) {
+      if (FORBIDDEN_IMPORT.test(text)) {
+        violations.push(file + ": lib/mcp may use REST handlers and schemas only, not services, the database or the gate");
+      }
+    } else if (text.includes("@modelcontextprotocol/sdk")) {
+      violations.push(file + ": imports the MCP SDK outside lib/mcp");
+    }
+  }
+  return violations;
+}
+
 /** Every way a write path skips the gate, as "file: rule". An empty list means none was found. */
 export function findViolations(root: string): string[] {
-  return [...routeViolations(root), ...serviceViolations(root), ...stubViolations(root)].sort();
+  return [...routeViolations(root), ...serviceViolations(root), ...stubViolations(root), ...mcpViolations(root)].sort();
 }
 
 export function formatReport(violations: string[]): string {

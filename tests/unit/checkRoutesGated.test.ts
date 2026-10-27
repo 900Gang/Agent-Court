@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -248,5 +248,159 @@ describe("the command", () => {
     const ci = readFileSync(path.join(repo, ".github/workflows/ci.yml"), "utf8");
     expect(ci.indexOf("pnpm check:routes")).toBeGreaterThan(ci.indexOf("pnpm lint"));
     expect(ci.indexOf("pnpm check:routes")).toBeLessThan(ci.indexOf("pnpm typecheck"));
+  });
+});
+
+// ---- N5: MCP stays a transport
+
+const MCP_ROUTE = (imports: string[]) =>
+  `${imports.join("\n")}\nexport async function POST(request: Request) { return handleMcp(request, getApiDeps()); }\n`;
+const LIB_MCP_IMPORTS = [
+  'import { handleMcp } from "@/lib/mcp/handler";',
+  'import { getApiDeps } from "@/lib/http/apiPipeline";',
+];
+const mcpFile = (imports: string[]) => `${imports.join("\n")}\nexport const x = 1;\n`;
+
+describe("findViolations: what lib/mcp may import", () => {
+  it.each([
+    ["a service", 'import { fileCase } from "@/lib/services/caseService";'],
+    ["the search service", 'import { searchCases } from "@/lib/services/searchService";'],
+    ["the database client", 'import { getDb } from "@/db/client";'],
+    ["the database schema", 'import { cases } from "@/db/schema";'],
+    ["the gate", 'import { screenSafely } from "@/lib/safety/gate";'],
+    ["the gate engine", 'import { createGate } from "@/lib/safety/engine";'],
+    ["drizzle", 'import { eq } from "drizzle-orm";'],
+    ["a service by a relative path", 'import { fileCase } from "../services/caseService";'],
+    ["the gate by a relative path", 'import { screenSafely } from "../safety/gate";'],
+    ["the database by a relative path", 'import { getDb } from "../../db/client";'],
+    ["a service by a long relative path", 'import { fileCase } from "../../lib/services/caseService";'],
+    ["a service by a dynamic import", 'const load = () => import("@/lib/services/caseService");'],
+    ["a service by require", 'const service = require("@/lib/services/caseService");'],
+    ["a re-export of a service", 'export { fileCase } from "@/lib/services/caseService";'],
+  ])("reports a file that imports %s", (_label, line) => {
+    const violations = findViolations(tree({ "lib/mcp/tools.ts": mcpFile([line]) }));
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toMatch(/^lib\/mcp\/tools\.ts: /);
+  });
+
+  it("reports a file in a subfolder of lib/mcp too", () => {
+    const violations = findViolations(tree({ "lib/mcp/tools/fileCase.ts": mcpFile(['import { fileCase } from "@/lib/services/caseService";']) }));
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toMatch(/^lib\/mcp\/tools\/fileCase\.ts: /);
+  });
+
+  it("says it once per file, however many forbidden imports there are", () => {
+    const file = mcpFile(['import { fileCase } from "@/lib/services/caseService";', 'import { getDb } from "@/db/client";', 'import { eq } from "drizzle-orm";']);
+    expect(findViolations(tree({ "lib/mcp/tools.ts": file }))).toHaveLength(1);
+  });
+
+  it("allows the REST handlers, the schemas, config, auth, the rate limiter, the SDK, zod and its own files", () => {
+    const allowed = mcpFile([
+      'import { handleFileCase } from "@/lib/http/handlers/cases";',
+      'import { runApi } from "@/lib/http/apiPipeline";',
+      'import { evidenceInputSchema } from "@/lib/schemas/evidence";',
+      'import { LIMITS } from "@/lib/config/constants";',
+      'import { logger } from "@/lib/config/logger";',
+      'import { authenticateApiKey } from "@/lib/auth/apiKeyAuth";',
+      'import { checkRequest } from "@/lib/ratelimit/limiter";',
+      'import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";',
+      'import { z } from "zod";',
+      'import { internalRequest } from "./result";',
+      'import pkg from "../../package.json";',
+    ]);
+    expect(findViolations(tree({ "lib/mcp/tools.ts": allowed }))).toEqual([]);
+  });
+
+  it("does not mind outside folders that happen to share a name", () => {
+    expect(findViolations(tree({ "lib/other/uses-services.ts": mcpFile(['import { fileCase } from "@/lib/services/caseService";']) }))).toEqual([]);
+  });
+
+  it("names the file and the rule, never the content", () => {
+    const violations = findViolations(
+      tree({ "lib/mcp/tools.ts": `// ${MARKER}\n${mcpFile(['import { fileCase } from "@/lib/services/caseService";'])}` }),
+    );
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).not.toContain(MARKER);
+    expect(violations[0]).not.toContain("caseService");
+  });
+});
+
+describe("findViolations: where the MCP SDK may appear", () => {
+  it.each([
+    ["lib/http/helper.ts", "a helper under lib/http"],
+    ["lib/services/otherService.ts", "a service"],
+    ["app/api/v1/x/route.ts", "a REST route"],
+    ["components/Thing.tsx", "a component"],
+    ["app/mcp/route.ts", "the MCP route itself, which must go through lib/mcp"],
+  ])("reports %s (%s)", (file) => {
+    const violations = findViolations(tree({ [file]: mcpFile(['import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";']) }));
+    expect(violations.some((message) => message.startsWith(`${file}: `))).toBe(true);
+  });
+
+  it("allows it anywhere under lib/mcp", () => {
+    const sdk = mcpFile(['import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";']);
+    expect(findViolations(tree({ "lib/mcp/server.ts": sdk, "lib/mcp/deep/thing.ts": sdk }))).toEqual([]);
+  });
+
+  it("names only the file", () => {
+    const file = `// ${MARKER}\n${mcpFile(['import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";'])}`;
+    const violations = findViolations(tree({ "lib/http/helper.ts": file }));
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).not.toContain(MARKER);
+  });
+});
+
+describe("findViolations: the app/mcp transport route", () => {
+  it("passes a POST route that imports lib/mcp and only safe helpers, and does not list it as a write route", () => {
+    const root = tree({ "app/mcp/route.ts": MCP_ROUTE(LIB_MCP_IMPORTS) });
+    expect(findViolations(root)).toEqual([]);
+    expect(listWriteRoutes(root).map((route) => route.file)).not.toContain("app/mcp/route.ts");
+  });
+
+  it.each([
+    ["a service", 'import { fileCase } from "@/lib/services/caseService";'],
+    ["the database", 'import { getDb } from "@/db/client";'],
+    ["the gate", 'import { createGate } from "@/lib/safety/engine";'],
+    ["drizzle", 'import { eq } from "drizzle-orm";'],
+    ["a service by a relative path", 'import { fileCase } from "../../lib/services/caseService";'],
+  ])("holds the route to the ordinary write rule once it also imports %s", (_label, extra) => {
+    const violations = findViolations(tree({ "app/mcp/route.ts": MCP_ROUTE([...LIB_MCP_IMPORTS, extra]) }));
+    expect(violations.some((message) => message.startsWith("app/mcp/route.ts: "))).toBe(true);
+  });
+
+  it("reports a POST route under app/mcp that uses no lib/mcp module", () => {
+    const violations = findViolations(tree({ "app/mcp/route.ts": `export async function POST() { return new Response("ok"); }\n` }));
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toMatch(/^app\/mcp\/route\.ts: /);
+  });
+
+  it("gives the same exemption to no other folder", () => {
+    const violations = findViolations(tree({ "app/api/v1/x/route.ts": MCP_ROUTE(LIB_MCP_IMPORTS) }));
+    expect(violations.some((message) => message.startsWith("app/api/v1/x/route.ts: "))).toBe(true);
+  });
+
+  it("leaves a GET-only route under app/mcp alone", () => {
+    const root = tree({ "app/mcp/route.ts": `export function GET() { return new Response("Not implemented", { status: 501 }); }\n` });
+    expect(findViolations(root)).toEqual([]);
+  });
+});
+
+describe("the real repository, with MCP in place", () => {
+  it("has no violation, and its MCP route is a transport route", () => {
+    expect(findViolations(repo)).toEqual([]);
+    expect(listWriteRoutes(repo).map((route) => route.file)).not.toContain("app/mcp/route.ts");
+    const route = readFileSync(path.join(repo, "app/mcp/route.ts"), "utf8");
+    expect(route).toMatch(/from "@\/lib\/mcp\//);
+    expect(route).not.toMatch(/@modelcontextprotocol/);
+  });
+
+  it("keeps every file under lib/mcp to REST handlers, schemas and helpers", () => {
+    const folder = path.join(repo, "lib/mcp");
+    const files = readdirSync(folder, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".ts"));
+    expect(files.length).toBeGreaterThanOrEqual(5);
+    for (const entry of files) {
+      const source = readFileSync(path.join(folder, entry.name), "utf8");
+      expect(source, entry.name).not.toMatch(/@\/lib\/services|@\/db|@\/lib\/safety|drizzle-orm/);
+    }
   });
 });
