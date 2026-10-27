@@ -24,6 +24,7 @@
     "rescan:held": "node --conditions=react-server --env-file=.env.local --import tsx scripts/rescan-held.ts"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@upstash/ratelimit": "^2.2.0",
     "@upstash/redis": "^1.39.0",
     "better-auth": "^1.7.10",
