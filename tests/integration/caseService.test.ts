@@ -836,3 +836,106 @@ describe("rejectHeldEvidence (AC-409)", () => {
     expect(errorOf(await rejectHeldEvidence(t.db, "not-a-uuid"))).toBe("not_found");
   });
 });
+
+describe("a viewer with no agent (a web visitor)", () => {
+  const tagFor = () => uniq("vis");
+
+  async function insertArgumentWithStatus(caseId: string, agentId: string, status: "held" | "active" | "withdrawn" | "won" | "lost" | "overturned" | "rejected") {
+    await t.db.insert(argumentsTable).values({ caseId, agentId, reasoning: "r", proposedChange: "p", status });
+  }
+
+  it("sees a public case with only its live evidence and its publicly visible arguments", async () => {
+    const filer = await makeAgent();
+    const c = await insertCase(filer.actor.agentId, { status: "argued" });
+    await insertEvidence(c.id, "active");
+    await insertEvidence(c.id, "held");
+    const rejected = await insertEvidence(c.id, "held");
+    await t.sql("update evidence set status = 'rejected' where id = $1", [rejected.id]);
+    for (const status of ["active", "won", "lost", "overturned", "held", "withdrawn", "rejected"] as const) {
+      await insertArgumentWithStatus(c.id, (await makeAgent()).actor.agentId, status);
+    }
+    const detail = await getCase(t.db, null, c.id);
+    expect(detail?.case.id).toBe(c.id);
+    expect(detail?.filedBy).toEqual({ handle: filer.agent.handle });
+    expect(detail?.evidence.map((item) => item.status)).toEqual(["active"]);
+    expect(detail?.arguments.map((entry) => entry.argument.status).sort()).toEqual(["active", "lost", "overturned", "won"]);
+  });
+
+  it("answers null for a held, withdrawn, rejected, unknown or malformed id", async () => {
+    const filer = await makeAgent();
+    for (const status of ["held", "withdrawn", "rejected"] as const) {
+      const c = await insertCase(filer.actor.agentId, { status });
+      expect(await getCase(t.db, null, c.id), status).toBeNull();
+    }
+    expect(await getCase(t.db, null, crypto.randomUUID())).toBeNull();
+    expect(await getCase(t.db, null, "not-a-uuid")).toBeNull();
+    expect(await getCase(t.db, null, "")).toBeNull();
+  });
+
+  it("sees exactly what an agent that owns nothing sees", async () => {
+    const filer = await makeAgent();
+    const stranger = await makeAgent();
+    const c = await insertCase(filer.actor.agentId, { status: "argued" });
+    await insertEvidence(c.id, "active");
+    await insertEvidence(c.id, "held");
+    await insertArgumentWithStatus(c.id, (await makeAgent()).actor.agentId, "active");
+    await insertArgumentWithStatus(c.id, (await makeAgent()).actor.agentId, "held");
+    expect(await getCase(t.db, null, c.id)).toEqual(await getCase(t.db, stranger.actor.agentId, c.id));
+  });
+
+  it("lists public cases only, filtered by status and tag, and never held, withdrawn or rejected ones", async () => {
+    const filer = await makeAgent();
+    const tag = tagFor();
+    const open = await insertCase(filer.actor.agentId, { status: "open", tags: [tag] });
+    const resolved = await insertCase(filer.actor.agentId, { status: "resolved", tags: [tag] });
+    for (const status of ["held", "withdrawn", "rejected"] as const) {
+      await insertCase(filer.actor.agentId, { status, tags: [tag] });
+    }
+    const all = await listCases(t.db, null, query({ tag }));
+    expect(all.items.map((item) => item.case.id).sort()).toEqual([open.id, resolved.id].sort());
+    const onlyResolved = await listCases(t.db, null, query({ tag, status: "resolved" }));
+    expect(onlyResolved.items.map((item) => item.case.id)).toEqual([resolved.id]);
+    expect((await listCases(t.db, null, query({ tag: tagFor() }))).items).toEqual([]);
+  });
+
+  it("pages with the cursor, newest first, without gaps or repeats", async () => {
+    const filer = await makeAgent();
+    const tag = tagFor();
+    const made: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      made.push((await insertCase(filer.actor.agentId, { status: "open", tags: [tag], createdAt: new Date(NOW.getTime() - i * 60_000) })).id);
+    }
+    const first = await listCases(t.db, null, query({ tag, limit: 2 }));
+    expect(first.items.map((item) => item.case.id)).toEqual(made.slice(0, 2));
+    expect(first.nextCursor).not.toBeNull();
+    const second = await listCases(t.db, null, query({ tag, limit: 2, cursor: decodeCursor(first.nextCursor as string) }));
+    expect(second.items.map((item) => item.case.id)).toEqual(made.slice(2, 4));
+    const third = await listCases(t.db, null, query({ tag, limit: 2, cursor: decodeCursor(second.nextCursor as string) }));
+    expect(third.items.map((item) => item.case.id)).toEqual(made.slice(4));
+    expect(third.nextCursor).toBeNull();
+  });
+
+  it("lists open cases that need an argument, from every filer, since no filer is excluded", async () => {
+    const one = await makeAgent();
+    const two = await makeAgent();
+    const tag = tagFor();
+    const a = await insertCase(one.actor.agentId, { status: "open", tags: [tag] });
+    const b = await insertCase(two.actor.agentId, { status: "open", tags: [tag] });
+    await insertCase(one.actor.agentId, { status: "argued", tags: [tag] });
+    await insertCase(two.actor.agentId, { status: "resolved", tags: [tag] });
+    const result = await listCases(t.db, null, query({ tag, needsArguments: true }));
+    expect(result.items.map((item) => item.case.id).sort()).toEqual([a.id, b.id].sort());
+  });
+
+  it("counts only the arguments a visitor can see", async () => {
+    const filer = await makeAgent();
+    const tag = tagFor();
+    const c = await insertCase(filer.actor.agentId, { status: "argued", tags: [tag] });
+    for (const status of ["active", "won", "held", "withdrawn", "rejected"] as const) {
+      await insertArgumentWithStatus(c.id, (await makeAgent()).actor.agentId, status);
+    }
+    const [item] = (await listCases(t.db, null, query({ tag }))).items;
+    expect(item.argumentCount).toBe(2);
+    expect(item.filedBy).toEqual({ handle: filer.agent.handle });
+  });
+});

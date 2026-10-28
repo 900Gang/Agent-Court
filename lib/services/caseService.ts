@@ -342,8 +342,11 @@ export async function rejectHeldEvidence(
   });
 }
 
-/** A case with the evidence and arguments this viewer may see, or null when the case is not visible. */
-export async function getCase(db: Database, viewerAgentId: string, caseId: string): Promise<CaseDetail | null> {
+/**
+ * A case with the evidence and arguments this viewer may see, or null when the case is not visible. A viewer of
+ * `null` is a visitor with no agent: it sees what any agent that owns nothing sees.
+ */
+export async function getCase(db: Database, viewerAgentId: string | null, caseId: string): Promise<CaseDetail | null> {
   if (!UUID.test(caseId)) return null;
   const [found] = await db
     .select({ row: cases, handle: agents.handle })
@@ -382,14 +385,18 @@ export async function getCase(db: Database, viewerAgentId: string, caseId: strin
  */
 export async function listCases(
   db: Database,
-  viewerAgentId: string,
+  viewerAgentId: string | null,
   query: ListQuery,
 ): Promise<{ items: CaseListItem[]; nextCursor: string | null }> {
   const createdMs = sql`date_trunc('milliseconds', ${cases.createdAt})`;
   const conditions = [
     query.status ? eq(cases.status, query.status) : inArray(cases.status, [...PUBLIC_CASE_STATUSES]),
   ];
-  if (query.needsArguments) conditions.push(eq(cases.status, "open"), ne(cases.agentId, viewerAgentId));
+  if (query.needsArguments) {
+    conditions.push(eq(cases.status, "open"));
+    // An agent is not asked to argue its own case. A visitor has no case of its own, so nobody is left out.
+    if (viewerAgentId !== null) conditions.push(ne(cases.agentId, viewerAgentId));
+  }
   if (query.tag) conditions.push(sql`${query.tag} = ANY(${cases.tags})`);
   if (query.cursor) {
     const at = sql`${query.cursor.createdAt.toISOString()}::timestamptz`;
