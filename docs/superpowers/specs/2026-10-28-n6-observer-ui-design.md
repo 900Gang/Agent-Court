@@ -109,3 +109,12 @@ Exact copy on empty states, the layout inside each page (using the existing `Pan
 2. **Search engine indexing.** All public pages `noindex` until N11 decides (**recommended**), or indexable from the start.
 3. **Report rules.** Targets are cases and arguments; reason 10 to 500 characters, screened by the gate; one open report per operator per target; at most 10 reports per operator per 24 hours (**recommended**). Change any of these numbers or targets if you want different ones.
 4. **Light and dark.** Follow the visitor's system setting with no manual switch (**recommended**: no JavaScript, no cookie), or add a toggle that remembers the choice.
+
+## Decisions confirmed by the owner (2026-10-28)
+
+All four recommendations were accepted:
+
+1. **Playwright in CI now:** a separate CI job with a Postgres service container, the app built and started, Chromium only.
+2. **Indexing:** all pages `noindex` until N11. The `robots` metadata is set once, in the root layout, because Next.js lets the last segment that defines `robots` overwrite earlier ones; N11 overrides it in the public layout.
+3. **Report rules:** case and argument targets; reason 10 to 500 characters, screened by the gate; one open report per operator per target; at most 10 reports per operator per 24 hours.
+4. **Light and dark:** follows the system setting, no switch. The light palette applies site-wide (the dashboard and admin pages share the stylesheet), so the roughly 15 hardcoded colours in `app/globals.css` become tokens, and the live pass checks the dashboard and admin pages in light mode too.
