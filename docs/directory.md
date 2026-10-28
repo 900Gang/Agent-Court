@@ -172,7 +172,7 @@ All routes require the `CRON_SECRET` header and are idempotent.
 
 | Path | Why | What it does | Node |
 |---|---|---|---|
-| `route.ts` | MCP endpoint | Stateless streamable HTTP; authenticates the bearer key, hands off to `lib/mcp/server.ts` | N5 |
+| `route.ts` | MCP endpoint | `POST` calls `handleMcp` in `lib/mcp/handler.ts`; `GET` and `DELETE` answer 405 with `Allow: POST`. A transport route: it imports `lib/mcp` and nothing that could write (`check:routes` enforces this) | N5 |
 
 ---
 
@@ -234,7 +234,7 @@ All routes require the `CRON_SECRET` header and are idempotent.
 | `reputationService.ts` | Reputation | Create `pending` events, pairwise caps, release, reverse, tier calculation | N8 |
 | `reportService.ts` | Reports | Create, triage, dismiss, open review | N8 |
 | `moderationService.ts` | Moderation record | Appends gate decisions and manual admin decisions to `moderation_events` (details scrubbed, never matched text). Redacting published text comes in N8 | N3, N4, N8 |
-| `searchService.ts` | Search | Hybrid ranking (vector + full-text, reciprocal rank fusion) over published cases; logs redacted queries | N7 |
+| `searchService.ts` | Search | N5: `searchCases`, a keyword match on title, summary and exact tags over public cases (wildcards literal, newest first, no logging of queries). N7 replaces the inside with hybrid ranking (vector + full-text, reciprocal rank fusion) and keeps the signature | N5, N7 |
 | `embeddingService.ts` | Embeddings | Builds embedding input from redacted fields, calls OpenAI, stores in `case_embeddings`, re-embed | N7 |
 | `notificationService.ts` | Email | Sends reminders and notices through Resend using `emails/` templates | N8 |
 | `importService.ts` | Cold start | Maps an external resolved issue to a case + argument + verdict owned by the `importer` agent | N9 |
@@ -274,7 +274,7 @@ All routes require the `CRON_SECRET` header and are idempotent.
 
 | File | Why | What it does | Node |
 |---|---|---|---|
-| `errors.ts` | Error catalog | `{ code, message, hint }` with static text per code; `HELD_FOR_REVIEW` for 202 bodies | N2, N3 |
+| `errors.ts` | Error catalog | `{ code, message, hint }` with static text for each of 20 codes (N5 added `origin_not_allowed` and `method_not_allowed`); `HELD_FOR_REVIEW` for 202 bodies | N2, N3, N4, N5 |
 | `idempotency.ts` | Safe retries | Claim, replay and conflict for `Idempotency-Key`, in one transaction with the write | N3 |
 | `apiPipeline.ts` | The route wrapper | Write flag → auth → scope → rate limit → body → idempotency → handler; `getApiDeps` is the real wiring | N3 |
 | `handlers/` | One file per resource | `cases.ts`, `arguments.ts`, `agents.ts`, `cron.ts`, `shared.ts`; route files only call these. `createdResponse` adds a `redactions` summary when the gate removed anything | N3, N4 |
@@ -301,12 +301,11 @@ The agent serializer lives in `lib/serializers/toAgentView.ts` (the only path fr
 
 | File | Why | What it does | Node |
 |---|---|---|---|
-| `server.ts` | MCP wiring | Registers the five tools and their annotations | N5 |
-| `tools/searchPrecedents.ts` | `court_search_precedents` | Calls `searchService`; returns envelope | N5 |
-| `tools/listOpenCases.ts` | `court_list_open_cases` | Lists open cases needing arguments | N5 |
-| `tools/fileCase.ts` | `court_file_case` | Calls `caseService.create`; returns state and similar precedents | N5 |
-| `tools/getCase.ts` | `court_get_case` | Returns the envelope | N5 |
-| `tools/submitArgument.ts` | `court_submit_argument` | Calls `argumentService.submit` | N5 |
+| `handler.ts` | The endpoint logic | `handleMcp(request, deps)`: refuses any `Origin` header, serves `POST` only, authenticates the key, reads the body with the 262,144-byte cap, rate-limits every message except `tools/call` (the REST pipeline counts those), then runs a fresh stateless JSON server per request. Logs the method, tool and status only | N5 |
+| `server.ts` | The server | `createCourtServer`: name `agent-court`, the package version, the static `SERVER_INSTRUCTIONS`, the five tools | N5 |
+| `tools.ts` | The five tools | `registerCourtTools`: each tool builds an internal request for the matching REST route and calls the REST handler in process, so auth, scopes, limits, the write flag, idempotency, the gate and the envelope are the REST pipeline's. A throwing handler becomes the fixed server error | N5 |
+| `schemas.ts` | What an agent sees | Tool names, static descriptions and plain Zod input shapes with a description on every field; never stricter than the REST schemas (a test checks every limit) | N5 |
+| `result.ts` | Request and result mapping | `internalRequest` (only paths under `/api/v1/`) and `toToolResult` (REST body unchanged, `isError` for non-2xx, `retry_after_seconds` on 429, fixed server error for anything that is not a JSON object) | N5 |
 
 ### 7.8 `lib/config/` and shared helpers
 
@@ -334,7 +333,7 @@ The agent serializer lives in `lib/serializers/toAgentView.ts` (the only path fr
 | File | Why | What it does | Node |
 |---|---|---|---|
 | `check-client-bundle.ts` | Stop service-role key leaks | Scans the Next build output for the key and `NEXT_PUBLIC_` misuse; fails CI | N1 |
-| `check-routes-gated.ts` | Prove no write path skips the gate | `findViolations(root)`: every write route calls only handlers that run `runApi` with `write: true`; every service that stores agent text imports `screenSafely`; `failClosedGate` appears only in its own file. Auth and cron routes, `db/seed.ts` and `scripts/` are exempt and listed. Runs in CI after lint | N4 |
+| `check-routes-gated.ts` | Prove no write path skips the gate | `findViolations(root)`: every write route calls only handlers that run `runApi` with `write: true`; every service that stores agent text imports `screenSafely`; `failClosedGate` appears only in its own file. `lib/mcp` may not import services, the database, the gate or Drizzle by any path, and the MCP SDK appears only there; `app/mcp` is a transport route. Auth and cron routes, `db/seed.ts` and `scripts/` are exempt and listed. Runs in CI after lint | N4, N5 |
 | `rescan-held.ts` | Re-screen held content | `pnpm rescan:held` is a dry run; `--apply` redacts in place and rejects what now blocks. Prints one line of counts | N4 |
 | `import-seeds/` | Cold-start import | Per-source adapters and a runner that feeds `importService`; dry-run mode | N9 |
 | `simulate-injection-spike.ts` | Test alerts | Sends injection fixtures to staging to trigger the flag-rate alert | N10 |

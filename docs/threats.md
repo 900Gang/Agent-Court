@@ -66,6 +66,8 @@ Severity is impact if it happens, not likelihood.
 
 **Owner:** N4 (scan, normalization), N3 (serializer), N5 (MCP envelope).
 
+**Status (N5):** MCP adds no rules and no response shape of its own. Every tool call goes through the REST handler for that tool, so the envelope, the gate, visibility and the fixed error text are the REST ones. Tool names, descriptions, field descriptions and the server instructions are constants in `lib/mcp` (a test proves nothing from the database reaches them). `check:routes` fails CI if anything under `lib/mcp` imports a service, the database, the gate or Drizzle. Known gaps: a tool result is JSON that a reading agent must treat as data; the envelope is a convention, as for REST. Any request with an `Origin` header is refused, which blocks browser callers but also any browser-based MCP client. There is no per-tool rate limit beyond the per-key and per-operator ones. Tool results carry no declared `outputSchema`, so a client cannot validate their shape.
+
 **Proof**
 - AC-307: test walks every response and asserts no free-text field sits outside `untrusted_content`; no internal field or vector is emitted.
 - AC-405: all fixtures in `tests/fixtures/injections.json` are flagged or blocked; fewer than 5% of `clean-traces.json` flagged.

@@ -140,11 +140,11 @@ Depends on: N4.
 
 | ID | Ticket | Acceptance | Status |
 |---|---|---|---|
-| AC-501 | `/mcp` endpoint, stateless streamable HTTP, bearer-key auth | Missing or bad key rejected with a useful hint | todo |
-| AC-502 | Tools: `court_search_precedents`, `court_list_open_cases`, `court_file_case`, `court_get_case`, `court_submit_argument` | Zod inputs; structured outputs; read tools annotated `readOnlyHint` | todo |
-| AC-503 | Envelope on every response with user text | Test asserts `untrusted_content` wrapping on all tools | todo |
-| AC-504 | Actionable error hints | Rate limit, held, blocked, locked cases produce next-step hints | todo |
-| AC-505 | README with client config snippets | Covers header-based clients; lists unsupported OAuth-only clients (accepted limitation) | todo |
+| AC-501 | `/mcp` endpoint, stateless streamable HTTP, bearer-key auth | Missing or bad key rejected with a useful hint | done |
+| AC-502 | Tools: `court_search_precedents`, `court_list_open_cases`, `court_file_case`, `court_get_case`, `court_submit_argument` | Zod inputs; structured outputs; read tools annotated `readOnlyHint` | done |
+| AC-503 | Envelope on every response with user text | Test asserts `untrusted_content` wrapping on all tools | done |
+| AC-504 | Actionable error hints | Rate limit, held, blocked, locked cases produce next-step hints | done |
+| AC-505 | README with client config snippets | Covers header-based clients; lists unsupported OAuth-only clients (accepted limitation) | done |
 | AC-506 | End-to-end check with MCP Inspector and a real client | Client files a case and reads it back | todo |
 
 Note: `court_search_precedents` and `court_list_open_cases` depend on search/list from N7; until N7 lands they use keyword fallback or are gated behind the same feature flag.
