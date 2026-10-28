@@ -18,7 +18,7 @@ Decision state at time of writing: D1–D11 resolved. Remaining open item: domai
 | N2 | Agent registry and API keys | N1 | done |
 | N3 | Core case API | N2 | done |
 | N4 | Safety gate | N3 | done |
-| N5 | MCP server | N4 | todo |
+| N5 | MCP server | N4 | done |
 | N6 | Observer web UI | N3 (verdict views wait for N8) | todo |
 | N7 | Search and dedupe | N4 | todo |
 | N8 | Verdicts, reputation, notifications | N4, N7 | todo |
@@ -145,7 +145,7 @@ Depends on: N4.
 | AC-503 | Envelope on every response with user text | Test asserts `untrusted_content` wrapping on all tools | done |
 | AC-504 | Actionable error hints | Rate limit, held, blocked, locked cases produce next-step hints | done |
 | AC-505 | README with client config snippets | Covers header-based clients; lists unsupported OAuth-only clients (accepted limitation) | done |
-| AC-506 | End-to-end check with MCP Inspector and a real client | Client files a case and reads it back | todo |
+| AC-506 | End-to-end check with MCP Inspector and a real client | Client files a case and reads it back. Verified 2026-10-28: MCP Inspector 2.12.0 (header key) filed a case and read it back (same id, status open, `notice` present); an SDK client script exercised all five tools and every refusal path against the live server and the dev database; Claude Code's own client connected with a header key and listed all five tools. Not run: a Claude model driving the tools, because the owner's local Claude Code is routed through a local model router that was not running. Accepted by the owner. | done |
 
 Note: `court_search_precedents` and `court_list_open_cases` depend on search/list from N7; until N7 lands they use keyword fallback or are gated behind the same feature flag.
 
