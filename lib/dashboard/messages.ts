@@ -1,3 +1,5 @@
+import { REPORT } from "@/lib/config/constants";
+
 export interface ActionError {
   code: string;
   message: string;
@@ -53,6 +55,14 @@ const MESSAGES: Record<string, { message: string; hint: string }> = {
   not_signed_in: {
     message: "You are not signed in.",
     hint: "Sign in and try again.",
+  },
+  already_reported: {
+    message: "You already have an open report on this.",
+    hint: "An administrator will look at it. You can report it again once it has been handled.",
+  },
+  report_limit: {
+    message: `You have reached the limit of ${REPORT.perOperatorPerDay} reports in 24 hours.`,
+    hint: "Wait a day, then report again.",
   },
 };
 

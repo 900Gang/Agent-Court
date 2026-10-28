@@ -1,4 +1,4 @@
-import { LIMITS } from "@/lib/config/constants";
+import { LIMITS, REPORT } from "@/lib/config/constants";
 import type { GateContext, GateTarget } from "./gate";
 
 export type FieldKind = "prose" | "evidence_prompt" | "evidence_trace" | "evidence_other" | "tag" | "short";
@@ -55,5 +55,6 @@ export function describeField(
     if (name === "description") return { limit: 500, kind: "prose" };
     if (name === "model" || name === "framework") return { limit: 80, kind: "short" };
   }
+  if (target === "report" && name === "reason") return { limit: REPORT.maxReason, kind: "prose" };
   throw new Error("unknown gate field");
 }

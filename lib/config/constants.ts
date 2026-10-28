@@ -50,6 +50,9 @@ export const LIMITS = {
 // Must match the database check `cases_tags_valid`.
 export const TAG_PATTERN = /^[a-z0-9-]{1,32}$/;
 
+/** Reports by signed-in operators on public cases and arguments. */
+export const REPORT = { minReason: 10, maxReason: 500, perOperatorPerDay: 10 } as const;
+
 export const PAGE = { defaultLimit: 20, maxLimit: 50 } as const;
 
 /** Case statuses any agent with the read scope may see. Held and withdrawn items belong to their owner only. */

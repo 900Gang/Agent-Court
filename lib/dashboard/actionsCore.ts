@@ -31,12 +31,12 @@ export interface IssuedKey {
   label: string | null;
 }
 
-function failure(error: string, fieldErrors?: Record<string, string>): ActionResult<never> {
+export function failure(error: string, fieldErrors?: Record<string, string>): ActionResult<never> {
   return fieldErrors ? { ok: false, error: describeError(error), fieldErrors } : { ok: false, error: describeError(error) };
 }
 
 /** Every write starts here: the origin is checked first, then that someone is signed in. */
-function guard(deps: ActionDeps): { operator: Operator } | { failure: ActionResult<never> } {
+export function guard(deps: ActionDeps): { operator: Operator } | { failure: ActionResult<never> } {
   try {
     assertSameOrigin(deps.headers, deps.expectedOrigin);
   } catch {
