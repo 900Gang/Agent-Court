@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 //   4. Files under lib/mcp use REST handlers, schemas and helpers only: never services, the database, the gate or
 //      Drizzle, by any path. The MCP SDK appears only there. A route under app/mcp is exempt from rule 1 only while
 //      it imports lib/mcp and nothing that could write by itself.
+//   5. Nothing under app/ or components/ renders raw HTML: user text goes through EscapedText, which cannot.
 // Messages name a file and a rule. They never quote the file.
 
 export const EXEMPT: ReadonlyArray<{ path: string; reason: string }> = [
@@ -157,9 +158,22 @@ function mcpViolations(root: string): string[] {
   return violations;
 }
 
+/** Pages and components show user text as text only (N6). The one way to put raw HTML on a page is the React prop for it. */
+function rawHtmlViolations(root: string): string[] {
+  return readSources(root, ["app", "components"], /\.tsx?$/)
+    .filter(({ text }) => text.includes("dangerouslySetInnerHTML"))
+    .map(({ file }) => file + ": renders raw HTML");
+}
+
 /** Every way a write path skips the gate, as "file: rule". An empty list means none was found. */
 export function findViolations(root: string): string[] {
-  return [...routeViolations(root), ...serviceViolations(root), ...stubViolations(root), ...mcpViolations(root)].sort();
+  return [
+    ...routeViolations(root),
+    ...serviceViolations(root),
+    ...stubViolations(root),
+    ...mcpViolations(root),
+    ...rawHtmlViolations(root),
+  ].sort();
 }
 
 export function formatReport(violations: string[]): string {

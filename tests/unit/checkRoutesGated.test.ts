@@ -404,3 +404,45 @@ describe("the real repository, with MCP in place", () => {
     }
   });
 });
+
+// ---- N6: no raw HTML in pages or components
+
+describe("findViolations: raw HTML", () => {
+  const RAW = (name: string) => `export function ${name}({ html }: { html: string }) {\n  return <div dangerouslySetInnerHTML={{ __html: html }} />;\n}\n`;
+
+  it.each([
+    ["a component", "components/Thing.tsx"],
+    ["a nested component", "components/admin/Thing.tsx"],
+    ["a page", "app/(public)/cases/[id]/page.tsx"],
+    ["a layout", "app/layout.tsx"],
+  ])("reports %s that renders raw HTML", (_label, file) => {
+    const violations = findViolations(tree({ [file]: RAW("Thing") }));
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toBe(`${file}: renders raw HTML`);
+  });
+
+  it("reports every such file, once each", () => {
+    const violations = findViolations(tree({ "components/A.tsx": RAW("A"), "components/B.tsx": RAW("B"), "app/x/page.tsx": RAW("X") }));
+    expect(violations).toHaveLength(3);
+  });
+
+  it("does not report files that do not use it", () => {
+    expect(findViolations(tree({ "components/Safe.tsx": "export const Safe = () => <p>hello</p>;\n" }))).toEqual([]);
+  });
+
+  it("only looks under app and components", () => {
+    expect(findViolations(tree({ "lib/render.tsx": RAW("Render"), "tests/helpers/x.tsx": RAW("X") }))).toEqual([]);
+  });
+
+  it("names the file and the rule, never the content", () => {
+    const file = `// ${MARKER}\n${RAW("Thing")}`;
+    const violations = findViolations(tree({ "components/Thing.tsx": file }));
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).not.toContain(MARKER);
+    expect(violations[0]).not.toContain("__html");
+  });
+
+  it("finds nothing in the real repository", () => {
+    expect(findViolations(repo)).toEqual([]);
+  });
+});
