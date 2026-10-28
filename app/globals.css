@@ -549,3 +549,146 @@ a.btn {
   white-space: pre-wrap;
   word-break: break-all;
 }
+
+/* Public pages (N6). Tokens only: tests/unit/themeContrast.test.ts rejects any raw colour. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  padding: 8px 12px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--red);
+}
+
+.skip-link:focus {
+  left: 8px;
+  top: 8px;
+  z-index: 10;
+}
+
+.site-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line-dim);
+}
+
+.brand {
+  color: var(--red);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.site-menu > summary {
+  cursor: pointer;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  color: var(--text);
+  list-style: none;
+}
+
+.site-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 0;
+}
+
+.site-nav a,
+.site-footer a {
+  color: var(--text);
+}
+
+.public main {
+  padding: 18px 14px;
+}
+
+.site-footer {
+  display: flex;
+  gap: 16px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line-dim);
+  color: var(--muted);
+}
+
+/* Wide screens keep the menu open and hide its button. Where a browser does not support the pseudo-element, the
+   button stays and works: the menu is then a click away, never missing. */
+@media (min-width: 721px) {
+  .site-menu::details-content {
+    content-visibility: visible;
+    display: block;
+  }
+
+  .site-menu > summary {
+    display: none;
+  }
+
+  .site-nav {
+    flex-direction: row;
+    gap: 18px;
+    padding: 0;
+  }
+}
+
+.case-card {
+  margin-bottom: 10px;
+}
+
+.case-card-title {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.case-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.tag {
+  padding: 1px 6px;
+  border: 1px solid var(--line-dim);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.field {
+  margin-top: 12px;
+}
+
+.facts {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.facts dd {
+  margin: 0;
+}
+
+.case-header .hero {
+  overflow-wrap: anywhere;
+}
+
+.argument,
+.evidence-item {
+  margin-bottom: 10px;
+}
+
+.report-slot {
+  margin-top: 10px;
+}
