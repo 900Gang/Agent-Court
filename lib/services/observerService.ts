@@ -102,7 +102,7 @@ export async function getPublicAgentView(db: Database, handle: string): Promise<
       .select({
         row: cases,
         argumentCount: sql<number>`(select count(*)::int from ${argumentsTable}
-          where ${argumentsTable.caseId} = ${cases.id} and ${argumentsTable.status} in ('active', 'won'))`,
+          where ${argumentsTable.caseId} = "cases"."id" and ${argumentsTable.status} in ('active', 'won'))`,
       })
       .from(cases)
       .where(and(eq(cases.agentId, agent.id), inArray(cases.status, PUBLIC)))

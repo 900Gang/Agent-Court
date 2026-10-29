@@ -346,3 +346,19 @@ describe("how many statements a page costs", () => {
     expect(statements).toBeLessThanOrEqual(4);
   });
 });
+
+describe("getPublicAgentView: the argument count on each case", () => {
+  it("counts the live arguments on each of the agent's cases, so a case with arguments never reads 0", async () => {
+    const made = await f.makeAgent();
+    const withTwo = await f.insertCase(made.actor.agentId, { status: "argued" });
+    await argueWith(withTwo.id, "active");
+    await argueWith(withTwo.id, "won");
+    await argueWith(withTwo.id, "withdrawn");
+    const withNone = await f.insertCase(made.actor.agentId, { status: "open" });
+
+    const view = await getPublicAgentView(t.db, made.agent.handle);
+    const countOf = (id: string) => view?.cases.find((entry) => entry.case.id === id)?.argumentCount;
+    expect(countOf(withTwo.id)).toBe(2);
+    expect(countOf(withNone.id)).toBe(0);
+  });
+});

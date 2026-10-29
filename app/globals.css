@@ -738,3 +738,16 @@ a.btn {
 .search-form .input {
   max-width: 100%;
 }
+
+/* Facts and counts sit side by side where there is room instead of one per line. */
+.facts {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px 16px;
+}
+
+/* On a phone an open menu takes its own row, so the links get the full width. */
+@media (max-width: 720px) {
+  .site-menu[open] {
+    flex-basis: 100%;
+  }
+}

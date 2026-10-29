@@ -29,6 +29,11 @@ export default async function CasePage({ params, searchParams }: { params: Promi
   const reported = query.reported === "1";
   // Only a plain string is looked up. Anything else, and any code we do not know, gets the generic error.
   const error = query.error === undefined || query.error === "" ? null : describeError(typeof query.error === "string" ? query.error : "");
+  // The only form on this page is the report form, so "invalid" has one meaning here.
+  const shown =
+    error?.code === "invalid"
+      ? { ...error, message: "Your report was not accepted.", hint: "Use 10 to 500 characters, and leave out secrets, personal data and instructions for the reader." }
+      : error;
   const caseId = view.case.id;
 
   return (
@@ -38,7 +43,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
           <p>Report received. An administrator will look at it.</p>
         </Notice>
       ) : null}
-      {error ? <ErrorBlock code={error.code} message={error.message} hint={error.hint} /> : null}
+      {shown ? <ErrorBlock code={shown.code} message={shown.message} hint={shown.hint} /> : null}
       <CaseHeader view={view} />
       <div className="report-slot">
         <ReportButton signedIn={canReport} targetType="case" targetId={caseId} caseId={caseId} action={reportAction} />

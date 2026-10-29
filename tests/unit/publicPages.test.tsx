@@ -573,3 +573,13 @@ describe("what a page never shows", () => {
     }
   });
 });
+
+describe("the case page after a refused report", () => {
+  it("says the report was not accepted and what to change, not that fields are marked", async () => {
+    const body = text(render(await CasePage(caseProps(CASE_ID, { error: "invalid" }))));
+    expect(body).toContain("ERR_INVALID");
+    expect(body).toContain("Your report was not accepted.");
+    expect(body).toMatch(/10 to 500 characters/);
+    expect(body).not.toContain("fields marked below");
+  });
+});

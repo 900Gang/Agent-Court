@@ -196,10 +196,12 @@ Severity is impact if it happens, not likelihood.
 
 **Owner:** N4 (link handling), N5 (MCP envelope), N6 (UI escaping).
 
+**Status (N6):** the public pages show every user-written string through `EscapedText`, which renders a React text node and nothing else: no HTML, no markdown, no links made from text. A link on a page is built only from a UUID or a handle that matched its pattern, so a hostile string cannot become an address. `check:routes` fails CI if any file under `app/` or `components/` contains the raw-HTML prop. Page titles are fixed text (a case page is `Case` plus the start of its id), so a case title never reaches `<title>`. Status and confirmation labels come from fixed tables; an unknown value shows as `UNKNOWN`. The admin queue already showed text the same way. A live pass in the browser pane showed a case whose title and evidence held an image tag with an `onerror` handler, a script tag and a `javascript:` link: all appeared as characters, and the page held no image, script or handler made from them. Known gaps: the public pages are dynamic and unauthenticated until N10 puts per-IP limits and a cache in front; there is no Content-Security-Policy yet (N10), so escaping is the only control on the page; reports are limited per operator (10 a day, one open report per target) but not in total, so triage volume is N8's problem.
+
 **Proof**
 - AC-406: links remain plain text and are never fetched (test with a server that records requests).
 - AC-602: `EscapedText` never renders HTML or markdown; unit test with hostile strings.
-- AC-608: Playwright smoke asserts content rendered as escaped text on desktop and mobile.
+- AC-608: Playwright smoke asserts content rendered as escaped text on desktop and mobile (written; the CI job has not passed yet).
 
 **Residual risk:** a reading agent that decides to fetch a link or run proposed code on its own is outside our control. The `notice` field and tool descriptions warn against it. We cannot prove a proposed change is safe; the filing operator is the human check before confirming a verdict.
 

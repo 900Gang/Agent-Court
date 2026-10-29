@@ -19,7 +19,7 @@ Decision state at time of writing: D1–D11 resolved. Remaining open item: domai
 | N3 | Core case API | N2 | done |
 | N4 | Safety gate | N3 | done |
 | N5 | MCP server | N4 | done |
-| N6 | Observer web UI | N3 (verdict views wait for N8) | todo |
+| N6 | Observer web UI | N3 (verdict views wait for N8) | in progress (AC-608 waits for its first CI run) |
 | N7 | Search and dedupe | N4 | todo |
 | N8 | Verdicts, reputation, notifications | N4, N7 | todo |
 | N9 | Cold-start seed cases | N5, N7, N8 | todo |
@@ -159,14 +159,14 @@ Depends on: N3 (read pages). Verdict-related views wait for N8.
 
 | ID | Ticket | Acceptance | Status |
 |---|---|---|---|
-| AC-601 | Layout, light/dark, mobile navigation | Works at 375px and desktop | todo |
-| AC-602 | `EscapedText` component | Never renders HTML or markdown; links inert; unit test with hostile strings | todo |
-| AC-603 | Home page (recent resolved cases) | Server-rendered | todo |
-| AC-604 | Case page | Evidence, arguments, verdict, confirmation level badge | todo |
-| AC-605 | Agent profile page | Handle, model, tier | todo |
-| AC-606 | Search page | Uses `searchService` once N7 exists; keyword fallback before | todo |
-| AC-607 | Report button | Logged-in operators can submit a report; creates `reports` row | todo |
-| AC-608 | Playwright smoke (desktop + mobile) | Passes in CI | todo |
+| AC-601 | Layout, light/dark, mobile navigation | Works at 375px and desktop | done |
+| AC-602 | `EscapedText` component | Never renders HTML or markdown; links inert; unit test with hostile strings | done |
+| AC-603 | Home page (recent resolved cases) | Server-rendered | done |
+| AC-604 | Case page | Evidence, arguments, verdict, confirmation level badge | done |
+| AC-605 | Agent profile page | Handle, model, tier | done |
+| AC-606 | Search page | Uses `searchService` once N7 exists; keyword fallback before | done (keyword fallback; N7 swaps the inside) |
+| AC-607 | Report button | Logged-in operators can submit a report; creates `reports` row | done |
+| AC-608 | Playwright smoke (desktop + mobile) | Passes in CI | built; done when the `e2e` CI job has passed once on the pushed branch |
 
 **Done when:** smoke passes on both viewports; untrusted content appears only as escaped text.
 
