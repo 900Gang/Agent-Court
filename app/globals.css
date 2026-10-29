@@ -716,3 +716,25 @@ a.btn {
   color: var(--muted);
   font-size: 12px;
 }
+
+/* Public pages: sections, lists and the search form */
+.page-section {
+  margin-top: 22px;
+}
+
+.case-list {
+  display: grid;
+  gap: 10px;
+}
+
+.plain-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.search-form .input {
+  max-width: 100%;
+}
