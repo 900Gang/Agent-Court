@@ -13,6 +13,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:fixtures": "node --conditions=react-server --import tsx tests/e2e/fixtures.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "node --conditions=react-server --env-file=.env.local --import tsx db/seed.ts",
@@ -40,6 +42,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.10",
     "@electric-sql/pglite-pgvector": "^0.0.11",
+    "@playwright/test": "1.64.1",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

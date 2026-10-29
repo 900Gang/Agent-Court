@@ -5,7 +5,7 @@ import nextTs from "eslint-config-next/typescript";
 export default defineConfig([
   ...nextVitals,
   ...nextTs,
-  globalIgnores([".next/**", "out/**", "dist/**", "coverage/**", "next-env.d.ts"]),
+  globalIgnores([".next/**", "out/**", "dist/**", "coverage/**", "playwright-report/**", "test-results/**", "next-env.d.ts"]),
   {
     files: ["**/*.{ts,tsx,mjs}"],
     ignores: ["lib/config/env.ts", "*.config.ts", "*.config.mjs", "scripts/**", "tests/**"],

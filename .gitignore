@@ -13,3 +13,7 @@ coverage/
 next-env.d.ts
 .superpowers/
 .claude/
+
+# Playwright output
+playwright-report/
+test-results/
