@@ -102,13 +102,13 @@ describe("tables", () => {
     }
   });
 
-  it("leaves case_embeddings and search_events to node N7", async () => {
+  it("has case_embeddings and search_events from node N7", async () => {
     const rows = await t.sql(
       `select table_name from information_schema.tables where table_schema = 'public'`,
     );
     const names = rows.map((row) => row.table_name as string);
-    expect(names).not.toContain("case_embeddings");
-    expect(names).not.toContain("search_events");
+    expect(names).toContain("case_embeddings");
+    expect(names).toContain("search_events");
   });
 
   it("enables pgvector", async () => {

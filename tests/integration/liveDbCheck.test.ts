@@ -74,8 +74,11 @@ describe("runDbChecks detects each defect", () => {
   it("a missing pgvector extension", () =>
     expectOnlyFailure(
       "pgvector is installed",
-      "drop extension vector",
-      "create extension vector",
+      // The embeddings table depends on the extension, so dropping it takes the vector column and its index along.
+      "drop extension vector cascade",
+      `create extension vector;
+       alter table case_embeddings add column embedding vector(1536) not null;
+       create index case_embeddings_embedding_hnsw on case_embeddings using hnsw (embedding vector_cosine_ops);`,
     ));
 
   it("a missing verdict lock trigger", () =>

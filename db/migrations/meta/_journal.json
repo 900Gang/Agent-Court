@@ -36,6 +36,13 @@
       "when": 1792935165474,
       "tag": "0004_same_lightspeed",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793373394466,
+      "tag": "0005_n7_search",
+      "breakpoints": true
     }
   ]
 }

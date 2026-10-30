@@ -12,4 +12,5 @@ export * from "./reports";
 export * from "./moderation";
 export * from "./audit";
 export * from "./idempotency";
-// embeddings.ts and searchEvents.ts arrive with node N7.
+export * from "./embeddings";
+export * from "./searchEvents";
