@@ -53,6 +53,27 @@ export const TAG_PATTERN = /^[a-z0-9-]{1,32}$/;
 /** Reports by signed-in operators on public cases and arguments. */
 export const REPORT = { minReason: 10, maxReason: 500, perOperatorPerDay: 10 } as const;
 
+// Embeddings (N7). The model and its dimension are fixed by the vector column in the database.
+export const EMBEDDING = {
+  model: "text-embedding-3-small",
+  dimensions: 1536,
+  /** In a request: short, because a slow provider must not slow the court. */
+  requestTimeoutMs: 3000,
+  cronTimeoutMs: 20000,
+} as const;
+
+// Search tuning (N7). minSimilarity is a first guess; the duplicate-recall evaluation sets it.
+export const SEARCH_TUNING = {
+  /** How many candidates each leg (vector, keyword) contributes before they are fused. */
+  legSize: 50,
+  /** The constant in reciprocal rank fusion: score = 1 / (rrfK + rank). */
+  rrfK: 60,
+  similarLimit: 3,
+  minSimilarity: 0.4,
+  /** Cases the re-embed cron handles in one run. */
+  cronBatch: 25,
+} as const;
+
 export const PAGE = { defaultLimit: 20, maxLimit: 50 } as const;
 
 /** Case statuses any agent with the read scope may see. Held and withdrawn items belong to their owner only. */

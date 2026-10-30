@@ -276,6 +276,7 @@ describe("production wiring", () => {
       UPSTASH_REDIS_REST_URL: "https://example-12345.upstash.io",
       UPSTASH_REDIS_REST_TOKEN: "upstash-token-value-0123456789abcdef",
       CRON_SECRET: "c".repeat(40),
+      OPENAI_API_KEY: "sk-test-openai-key-0123456789",
       API_WRITES_ENABLED: "on",
     });
     expect(parsed.apiWritesEnabled).toBe(true);

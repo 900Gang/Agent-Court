@@ -20,6 +20,8 @@ export interface ServerEnv {
   apiWritesEnabled: boolean;
   /** Bearer secret for the scheduled re-scan endpoint. Required in production and staging; null elsewhere when unset. */
   cronSecret: string | null;
+  /** OpenAI key for embeddings. Null when unset: search then uses keywords only. Required in production and staging. */
+  openAiApiKey: string | null;
 }
 
 export class EnvError extends Error {
@@ -42,6 +44,7 @@ const KEYS = [
   "KILL_SWITCH",
   "API_WRITES_ENABLED",
   "CRON_SECRET",
+  "OPENAI_API_KEY",
 ] as const;
 
 const FLAG_ON = ["on", "true", "1"];
@@ -61,6 +64,7 @@ const schema = z
     KILL_SWITCH: z.string().optional(),
     API_WRITES_ENABLED: z.string().optional(),
     CRON_SECRET: z.string().min(32).optional(),
+    OPENAI_API_KEY: z.string().min(1).optional(),
   })
   .superRefine((env, ctx) => {
     if (env.APP_ENV === "production" && !env.BETTER_AUTH_URL.startsWith("https://")) {
@@ -99,6 +103,11 @@ const schema = z
     const writes = (env.API_WRITES_ENABLED ?? "").toLowerCase();
     if (![...FLAG_ON, ...FLAG_OFF].includes(writes)) {
       ctx.addIssue({ code: "custom", path: ["API_WRITES_ENABLED"], message: "must be on or off" });
+    }
+
+    // Without a key search still works on keywords, but a deployed app is meant to run with meaning-based search.
+    if (deployed && env.OPENAI_API_KEY === undefined) {
+      ctx.addIssue({ code: "custom", path: ["OPENAI_API_KEY"], message: "required in production and staging" });
     }
 
     // The re-scan endpoint is open to anyone without it, so a deployed app must have one.
@@ -146,6 +155,7 @@ export function parseServerEnv(source: Record<string, string | undefined>): Serv
   ]);
   if (env.UPSTASH_REDIS_REST_TOKEN) secrets.add(env.UPSTASH_REDIS_REST_TOKEN);
   if (env.CRON_SECRET) secrets.add(env.CRON_SECRET);
+  if (env.OPENAI_API_KEY) secrets.add(env.OPENAI_API_KEY);
   const leaked = Object.entries(source)
     .filter(([name, value]) => name.startsWith("NEXT_PUBLIC_") && value !== undefined && secrets.has(value))
     .map(([name]) => name);
@@ -168,6 +178,7 @@ export function parseServerEnv(source: Record<string, string | undefined>): Serv
     killSwitch: FLAG_ON.includes((env.KILL_SWITCH ?? "").toLowerCase()),
     apiWritesEnabled: FLAG_ON.includes((env.API_WRITES_ENABLED ?? "").toLowerCase()),
     cronSecret: env.CRON_SECRET ?? null,
+    openAiApiKey: env.OPENAI_API_KEY ?? null,
   };
 }
 

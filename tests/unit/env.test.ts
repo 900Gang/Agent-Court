@@ -37,6 +37,7 @@ describe("parseServerEnv", () => {
       killSwitch: false,
       apiWritesEnabled: false,
       cronSecret: null,
+      openAiApiKey: null,
     });
   });
 
@@ -94,6 +95,8 @@ describe("parseServerEnv", () => {
         UPSTASH_REDIS_REST_URL: "https://example-12345.upstash.io",
         UPSTASH_REDIS_REST_TOKEN: "upstash-token-value-0123456789abcdef",
         CRON_SECRET: "c".repeat(40),
+
+        OPENAI_API_KEY: "sk-test-openai-key-0123456789",
       }).appEnv,
     ).toBe("production");
   });
@@ -147,6 +150,8 @@ describe("parseServerEnv: Upstash and kill switch", () => {
     APP_ENV: "production",
     BETTER_AUTH_URL: "https://agent-court.example",
     CRON_SECRET: "c".repeat(40),
+
+    OPENAI_API_KEY: "sk-test-openai-key-0123456789",
   };
 
   it("leaves the Upstash values null in development and test when they are not set", () => {
@@ -221,6 +226,8 @@ describe("parseServerEnv: API writes flag", () => {
     APP_ENV: appEnv,
     BETTER_AUTH_URL: "https://agent-court.example",
     CRON_SECRET: "c".repeat(40),
+
+    OPENAI_API_KEY: "sk-test-openai-key-0123456789",
   });
 
   it.each(["on", "true", "1", "ON", "True"])("turns writes on for %s", (value) => {
@@ -265,6 +272,7 @@ describe("parseServerEnv: CRON_SECRET", () => {
     ...upstash,
     APP_ENV: appEnv,
     BETTER_AUTH_URL: "https://agent-court.example",
+    OPENAI_API_KEY: "sk-test-openai-key-0123456789",
     ...extra,
   });
   const secret = "c0ffee-cron-secret-value-0123456789ab";
