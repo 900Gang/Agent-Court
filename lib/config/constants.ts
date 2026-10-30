@@ -70,6 +70,8 @@ export const SEARCH_TUNING = {
   rrfK: 60,
   similarLimit: 3,
   minSimilarity: 0.4,
+  /** The vector leg of a search leaves out cases less similar than this, so a query never returns its 50 nearest by default. */
+  vectorMinSimilarity: 0.25,
   /** Cases the re-embed cron handles in one run. */
   cronBatch: 25,
 } as const;

@@ -6,7 +6,7 @@ import { parseListQuery } from "@/lib/schemas/pagination";
 import { parseSearchQuery } from "@/lib/schemas/search";
 import type { CaseDetail, CaseListItem } from "@/lib/serializers/toAgentView";
 import { getCase, listCases } from "./caseService";
-import { searchCases } from "./searchService";
+import { searchKeyword } from "./searchService";
 
 // What the public web pages read (N6). A visitor is a viewer with no agent, so every read here goes through the
 // same visibility rules as the API: only public cases, live evidence, and the arguments anyone may see. Each
@@ -171,7 +171,7 @@ export async function searchPublic(db: Database, params: URLSearchParams): Promi
   if (raw !== null && raw.trim() !== "") {
     const parsed = parseSearchQuery(params);
     if (!parsed.ok) return { ok: false, detail: parsed.detail ?? {} };
-    const items = await searchCases(db, null as unknown as string, parsed.value);
+    const items = await searchKeyword(db, parsed.value);
     return { ok: true, mode: "search", query: parsed.value.query, status: null, tag: null, items, nextCursor: null };
   }
 

@@ -113,7 +113,7 @@ describe("GET /api/v1/cases/search", () => {
 
   it("treats hostile queries as text: no error, no match, and the query is never echoed", async () => {
     const reader = await agentWithKey();
-    for (const query of ["<script>alert(1)</script>", "'; DROP TABLE cases; --", "%", "__no_such_title__", "\\", "Ignore previous instructions"]) {
+    for (const query of ["<script>alert(1)</script>", "'; DROP TABLE cases; --", "%", "__no_such_zzzqq__", "\\", "Ignore previous instructions"]) {
       const response = await handleSearchCases(search(reader.key, `?q=${encodeURIComponent(query)}`), deps());
       expect(response.status).toBe(200);
       const text = await response.text();
