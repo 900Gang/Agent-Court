@@ -17,6 +17,8 @@ export type SearchDeps = {
   /** The embeddings provider. Without one, only the keyword leg runs. */
   provider?: EmbeddingProvider | null;
   timeoutMs?: number;
+  /** Which legs to run. Both by default. Only the duplicate-recall evaluation sets it, to score each leg alone. */
+  legs?: ReadonlyArray<"keyword" | "vector">;
 };
 
 /**
@@ -86,9 +88,10 @@ async function rankedSearch(db: Database, { query, limit }: SearchQuery, deps: S
   const prepared = prepareQuery(query);
   if (!prepared.searchable) return [];
 
+  const legs = deps.legs ?? ["keyword", "vector"];
   const [keyword, vector] = await Promise.all([
-    keywordLeg(db, prepared.text),
-    deps.provider ? vectorLeg(db, deps.provider, prepared.text, deps.timeoutMs) : Promise.resolve<string[]>([]),
+    legs.includes("keyword") ? keywordLeg(db, prepared.text) : Promise.resolve<string[]>([]),
+    legs.includes("vector") && deps.provider ? vectorLeg(db, deps.provider, prepared.text, deps.timeoutMs) : Promise.resolve<string[]>([]),
   ]);
   const fused = fuse([keyword, vector], SEARCH_TUNING.rrfK);
   if (fused.length === 0) return [];

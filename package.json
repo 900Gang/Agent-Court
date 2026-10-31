@@ -15,6 +15,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:fixtures": "node --conditions=react-server --import tsx tests/e2e/fixtures.ts",
+    "eval:search": "node --conditions=react-server --env-file=.env.local --import tsx scripts/eval-search.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "node --conditions=react-server --env-file=.env.local --import tsx db/seed.ts",
