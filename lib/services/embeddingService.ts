@@ -95,14 +95,16 @@ export async function embedCase(
 const SCAN_BATCH = 200;
 
 /**
- * Ids of public cases that need a vector for `model`: none stored, or one made from older text. Oldest first, at
- * most `limit`. A case that fails the second redaction pass is left out: it would stay at the front of every run
- * and starve the rest. It is reported by `embedCase`, not here. This reads cases in pages and hashes their text, so
- * its cost grows with the number of public cases; that is fine at launch size, and the cron batch keeps one run short.
+ * Walks the public cases, oldest first, and collects the ones that need a vector for `model`: none stored, or one made
+ * from older text. A case that fails the second redaction pass is counted but never listed: it would stay at the front
+ * of every run and starve the rest. The scan stops once `limit` stale cases are found, so `unsafe` is a lower bound.
+ * It reads cases in pages and hashes their text, so its cost grows with the number of public cases; that is fine at
+ * launch size, and the cron batch keeps one run short.
  */
-export async function findStaleCases(db: Database, model: string, limit: number): Promise<string[]> {
-  if (limit <= 0) return [];
+async function scanStale(db: Database, model: string, limit: number): Promise<{ stale: string[]; unsafe: number }> {
   const stale: string[] = [];
+  let unsafe = 0;
+  if (limit <= 0) return { stale, unsafe };
   for (let offset = 0; stale.length < limit; offset += SCAN_BATCH) {
     const rows = await db
       .select({
@@ -124,13 +126,51 @@ export async function findStaleCases(db: Database, model: string, limit: number)
     for (const row of rows) {
       const input = buildEmbeddingInput(row);
       if (row.storedHash === hashEmbeddingInput(model, input)) continue;
-      if (!checkInput(input).ok) continue;
+      if (!checkInput(input).ok) {
+        unsafe++;
+        continue;
+      }
       stale.push(row.id);
       if (stale.length >= limit) break;
     }
     if (rows.length < SCAN_BATCH) break;
   }
-  return stale;
+  return { stale, unsafe };
+}
+
+/** Ids of public cases that need a vector for `model`, oldest first, at most `limit`. */
+export async function findStaleCases(db: Database, model: string, limit: number): Promise<string[]> {
+  return (await scanStale(db, model, limit)).stale;
+}
+
+// How many stale cases beyond the batch a run looks for, only to say that more work is waiting.
+const REMAINING_CAP = 100;
+
+/**
+ * One run of the re-embed cron: embeds up to `limit` stale cases, oldest first, one provider call each, and stops
+ * before starting a case once the deadline has passed. Returns counts only. `remaining` is the stale cases left, counted
+ * up to 100 beyond the batch. A case the provider failed on is left for the next run. Idempotent.
+ */
+export async function reembedStale(
+  db: Database,
+  provider: EmbeddingProvider,
+  options: { limit: number; timeoutMs: number; deadline: number; clock?: () => number },
+): Promise<{ embedded: number; current: number; unsafe: number; failed: number; remaining: number }> {
+  const clock = options.clock ?? Date.now;
+  const { stale, unsafe } = await scanStale(db, provider.model, options.limit + REMAINING_CAP);
+  const counts = { embedded: 0, current: 0, unsafe, failed: 0, remaining: 0 };
+  let processed = 0;
+  for (const id of stale) {
+    if (processed >= options.limit || clock() >= options.deadline) break;
+    processed++;
+    const { status } = await embedCase(db, provider, id, { timeoutMs: options.timeoutMs });
+    if (status === "embedded") counts.embedded++;
+    else if (status === "current") counts.current++;
+    else if (status === "unsafe") counts.unsafe++;
+    else if (status === "failed") counts.failed++;
+  }
+  counts.remaining = stale.length - processed;
+  return counts;
 }
 
 /**

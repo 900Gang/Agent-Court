@@ -74,6 +74,8 @@ export const SEARCH_TUNING = {
   vectorMinSimilarity: 0.25,
   /** Cases the re-embed cron handles in one run. */
   cronBatch: 25,
+  /** The most time one re-embed run spends starting new cases. */
+  cronBudgetMs: 30000,
 } as const;
 
 export const PAGE = { defaultLimit: 20, maxLimit: 50 } as const;
