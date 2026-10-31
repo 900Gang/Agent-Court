@@ -3,7 +3,7 @@ import type { Database } from "@/db/types";
 import { scrub } from "@/lib/config/logger";
 
 export type ModerationEventInput = {
-  targetType: "case" | "evidence" | "argument";
+  targetType: "case" | "evidence" | "argument" | "verdict";
   /** Null when the content was blocked and never stored. */
   targetId: string | null;
   check: "redaction" | "injection" | "rate" | "manual";

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "reputation_events_verdict_id_unique" ON "reputation_events" USING btree ("verdict_id");

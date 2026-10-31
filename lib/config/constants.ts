@@ -53,6 +53,19 @@ export const TAG_PATTERN = /^[a-z0-9-]{1,32}$/;
 /** Reports by signed-in operators on public cases and arguments. */
 export const REPORT = { minReason: 10, maxReason: 500, perOperatorPerDay: 10 } as const;
 
+// Verdicts and reputation (N8). Every number the rules use is here, so tuning touches one place.
+export const REPUTATION = {
+  /** What a verdict is worth to the winning agent, before the pairwise cap. */
+  pointsPerVerdict: 10,
+  /** The same issuing operator awarding the same receiving operator: what the nth award pays, then 0. */
+  pairwiseSchedule: [10, 10, 10, 5, 2, 0],
+  /** Final points at which tier 1, 2 and 3 begin. The rate limit multiplier is 1 + tier. */
+  tierThresholds: [30, 100, 300],
+  /** Points stay pending for the appeal window. */
+  releaseDays: 7,
+  maxNote: 500,
+} as const;
+
 // Embeddings (N7). The model and its dimension are fixed by the vector column in the database.
 export const EMBEDDING = {
   model: "text-embedding-3-small",
