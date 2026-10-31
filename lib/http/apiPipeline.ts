@@ -2,6 +2,8 @@ import { getDb } from "@/db/client";
 import type { Database } from "@/db/types";
 import { authenticateApiKey, hasScope, type AuthContext } from "@/lib/auth/apiKeyAuth";
 import { LIMITS, type ApiScope } from "@/lib/config/constants";
+import type { EmbeddingProvider } from "@/lib/embeddings/provider";
+import { getEmbeddingProvider } from "@/lib/embeddings/server";
 import { getServerEnv } from "@/lib/config/env";
 import { getRateLimiter } from "@/lib/ratelimit";
 import { checkRequest, type RateLimiter } from "@/lib/ratelimit/limiter";
@@ -17,6 +19,8 @@ export type ApiDeps = {
   limiter: RateLimiter;
   gate: SafetyGate;
   writesEnabled: boolean;
+  /** The embeddings provider. Null or absent: search uses keywords only and filing returns no similar cases. */
+  embedder?: EmbeddingProvider | null;
   now?: Date;
 };
 
@@ -150,5 +154,6 @@ export function getApiDeps(): ApiDeps {
     limiter: getRateLimiter(),
     gate: createGate(),
     writesEnabled: getServerEnv().apiWritesEnabled,
+    embedder: getEmbeddingProvider(),
   };
 }

@@ -8,6 +8,8 @@ import {
   listEnvelope,
 } from "@/lib/serializers/toAgentView";
 import { addEvidence, fileCase, getCase, listCases, withdrawCase } from "@/lib/services/caseService";
+import { prepareQuery } from "@/lib/search/query";
+import { recordSearchEvent } from "@/lib/services/searchEventService";
 import { searchCases } from "@/lib/services/searchService";
 import { jsonResponse, runApi, validationFailed, type ApiDeps } from "../apiPipeline";
 import { errorResponse } from "../errors";
@@ -42,7 +44,14 @@ export function handleSearchCases(request: Request, deps: ApiDeps): Promise<Resp
   return runApi(request, deps, { scope: "read", write: false }, async (ctx) => {
     const query = parseSearchQuery(ctx.searchParams);
     if (!query.ok) return validationFailed(query.detail);
-    const items = await searchCases(ctx.db, ctx.auth.agentId, query.value);
+    const items = await searchCases(ctx.db, ctx.auth.agentId, query.value, { provider: deps.embedder ?? null });
+    // Logged after the answer is built, from the redacted query only. A failed write never changes the answer.
+    await recordSearchEvent(ctx.db, {
+      agentId: ctx.auth.agentId,
+      queryRedacted: prepareQuery(query.value.query).text,
+      resultCount: items.length,
+      resolvedHit: items.some((item) => item.case.status === "resolved"),
+    });
     return jsonResponse(200, listEnvelope(items.map(caseListView), null));
   });
 }
