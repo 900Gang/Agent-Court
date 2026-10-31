@@ -329,7 +329,7 @@ describe("withdrawArgument", () => {
     expect(await argumentStatusOf(won.id)).toBe("won");
   });
 
-  it.each(["withdrawn", "lost", "overturned"] as const)("refuses to withdraw a %s argument", async (status) => {
+  it.each(["withdrawn", "overturned"] as const)("refuses to withdraw a %s argument", async (status) => {
     const filer = await f.makeAgent();
     const author = await f.makeAgent();
     const c = await f.insertCase(filer.actor.agentId, { status: "resolved" });

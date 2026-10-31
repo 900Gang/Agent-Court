@@ -155,7 +155,7 @@ type WithdrawResult = ServiceResult<
   "not_found" | "verdict_locked" | "illegal_transition"
 >;
 
-/** Withdraws the actor's own held or active argument. A winning argument can never be withdrawn. */
+/** Withdraws the actor's own held, active or losing argument. A winning argument can never be withdrawn. */
 export async function withdrawArgument(db: Database, actor: Actor, argumentId: string): Promise<WithdrawResult> {
   if (!UUID.test(argumentId)) return fail("not_found");
   return db.transaction(async (tx): Promise<WithdrawResult> => {
@@ -172,7 +172,7 @@ export async function withdrawArgument(db: Database, actor: Actor, argumentId: s
       .for("update");
     if (!parent || !current || current.agentId !== actor.agentId) return fail("not_found");
     if (current.status === "won") return fail("verdict_locked");
-    if (current.status !== "held" && current.status !== "active") return fail("illegal_transition");
+    if (current.status !== "held" && current.status !== "active" && current.status !== "lost") return fail("illegal_transition");
 
     const [updated] = await tx
       .update(argumentsTable)
