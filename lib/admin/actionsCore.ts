@@ -6,6 +6,8 @@ import { assertSameOrigin } from "@/lib/http/origin";
 import { publishHeldArgument, rejectHeldArgument } from "@/lib/services/argumentService";
 import { writeAudit } from "@/lib/services/auditService";
 import { publishHeldCase, publishHeldEvidence, rejectHeldCase, rejectHeldEvidence } from "@/lib/services/caseService";
+import { EMBEDDING } from "@/lib/config/constants";
+import { embedCase } from "@/lib/services/embeddingService";
 import { recordModeration } from "@/lib/services/moderationService";
 import { fail, ok, type ServiceResult } from "@/lib/services/result";
 
@@ -54,7 +56,7 @@ export async function moderateCore(deps: ActionDeps, input: ModerateInput): Prom
   if (!isKind(input.kind) || !isDecision(input.decision)) return failure("invalid");
   const { kind, decision } = input;
 
-  return deps.db.transaction(async (tx): Promise<ActionResult<{ status: string }>> => {
+  const outcome = await deps.db.transaction(async (tx): Promise<ActionResult<{ status: string }>> => {
     const result = await decide(tx, kind, input.id, decision);
     if (!result.ok) return failure(result.error);
 
@@ -74,4 +76,11 @@ export async function moderateCore(deps: ActionDeps, input: ModerateInput): Prom
     });
     return { ok: true, value: { status: result.value.status } };
   });
+
+  // Once an approved case is public it gets its vector, outside the transaction. A failure changes nothing: the case
+  // stays approved and the re-embed cron picks it up.
+  if (outcome.ok && decision === "approve" && kind === "case" && deps.embedder) {
+    await embedCase(deps.db, deps.embedder, input.id, { timeoutMs: EMBEDDING.requestTimeoutMs });
+  }
+  return outcome;
 }

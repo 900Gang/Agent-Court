@@ -1,3 +1,4 @@
+import { EMBEDDING, SEARCH_TUNING } from "@/lib/config/constants";
 import { parseListQuery } from "@/lib/schemas/pagination";
 import { parseSearchQuery } from "@/lib/schemas/search";
 import {
@@ -9,6 +10,7 @@ import {
 } from "@/lib/serializers/toAgentView";
 import { addEvidence, fileCase, getCase, listCases, withdrawCase } from "@/lib/services/caseService";
 import { prepareQuery } from "@/lib/search/query";
+import { embedAndFindSimilar } from "@/lib/services/embeddingService";
 import { recordSearchEvent } from "@/lib/services/searchEventService";
 import { searchCases } from "@/lib/services/searchService";
 import { jsonResponse, runApi, validationFailed, type ApiDeps } from "../apiPipeline";
@@ -25,7 +27,18 @@ export function handleFileCase(request: Request, deps: ApiDeps): Promise<Respons
     if (!result.ok) return failureResponse(result.error, result.detail);
     const detail = await getCase(ctx.db, actor.agentId, result.value.case.id);
     if (!detail) return errorResponse("not_found");
-    return createdResponse(result.value.held, envelope("case", caseDetailView(detail)), result.value.redactions);
+    // Only a public case is embedded. This runs inside the request's transaction, bounded by the provider timeout, so a
+    // retry with the same Idempotency-Key gets the identical answer. Any failure gives an empty list, never an error.
+    const similar =
+      result.value.held || !deps.embedder
+        ? []
+        : await embedAndFindSimilar(ctx.db, deps.embedder, result.value.case.id, {
+            limit: SEARCH_TUNING.similarLimit,
+            minSimilarity: SEARCH_TUNING.minSimilarity,
+            timeoutMs: deps.embedTimeoutMs ?? EMBEDDING.requestTimeoutMs,
+          });
+    const body = { ...envelope("case", caseDetailView(detail)), similar_resolved: similar.map(caseListView) };
+    return createdResponse(result.value.held, body, result.value.redactions);
   });
 }
 

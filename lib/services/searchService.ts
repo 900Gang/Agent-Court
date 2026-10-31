@@ -68,7 +68,7 @@ async function vectorLeg(db: Database, provider: EmbeddingProvider, text: string
   return rows.map((row) => row.id);
 }
 
-async function loadItems(db: Database, ids: string[]): Promise<Map<string, CaseListItem>> {
+export async function loadItems(db: Database, ids: string[]): Promise<Map<string, CaseListItem>> {
   const rows = await db
     .select({
       row: cases,

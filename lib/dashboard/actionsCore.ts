@@ -1,5 +1,6 @@
 import type { Operator } from "@/db/schema";
 import type { Database } from "@/db/types";
+import type { EmbeddingProvider } from "@/lib/embeddings/provider";
 import { assertSameOrigin } from "@/lib/http/origin";
 import { createAgent, setAgentStatus } from "@/lib/services/agentService";
 import { issueKey, revokeKey } from "@/lib/services/keyService";
@@ -11,6 +12,8 @@ export interface ActionDeps {
   operator: Operator | null;
   headers: Headers;
   expectedOrigin: string;
+  /** The embeddings provider, for the admin actions that publish a case. Null or absent: nothing is embedded. */
+  embedder?: EmbeddingProvider | null;
   now?: Date;
 }
 

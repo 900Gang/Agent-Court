@@ -1,10 +1,12 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { caseEmbeddings, cases } from "@/db/schema";
 import type { Database } from "@/db/types";
 import { PUBLIC_CASE_STATUSES } from "@/lib/config/constants";
 import { logger } from "@/lib/config/logger";
 import { buildEmbeddingInput, checkInput, hashEmbeddingInput } from "@/lib/embeddings/input";
 import { EmbeddingError, type EmbeddingProvider } from "@/lib/embeddings/provider";
+import type { CaseListItem } from "@/lib/serializers/toAgentView";
+import { loadItems } from "./searchService";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PUBLIC = [...PUBLIC_CASE_STATUSES];
@@ -129,4 +131,44 @@ export async function findStaleCases(db: Database, model: string, limit: number)
     if (rows.length < SCAN_BATCH) break;
   }
   return stale;
+}
+
+/**
+ * Embeds a case and answers with the resolved cases nearest to it: above `minSimilarity`, nearest first, at most
+ * `limit`, never the case itself and never a case that is not resolved. The comparison happens inside the database
+ * against the vector just stored, so no vector reaches this code. Any failure, a case that is not public, or a case
+ * that cannot be embedded gives an empty list.
+ */
+export async function embedAndFindSimilar(
+  db: Database,
+  provider: EmbeddingProvider,
+  caseId: string,
+  options: { limit: number; minSimilarity: number; timeoutMs?: number },
+): Promise<CaseListItem[]> {
+  const embedded = await embedCase(db, provider, caseId, options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs });
+  if (embedded.status !== "embedded" && embedded.status !== "current") return [];
+
+  const ownVector = sql`(select "embedding" from "case_embeddings" where "case_id" = ${caseId}::uuid and "model" = ${provider.model})`;
+  const distance = sql`${caseEmbeddings.embedding} <=> ${ownVector}`;
+  const rows = await db
+    .select({ id: cases.id })
+    .from(caseEmbeddings)
+    .innerJoin(cases, eq(cases.id, caseEmbeddings.caseId))
+    .where(
+      and(
+        eq(caseEmbeddings.model, provider.model),
+        eq(cases.status, "resolved"),
+        ne(cases.id, caseId),
+        sql`${distance} <= ${1 - options.minSimilarity}`,
+      ),
+    )
+    .orderBy(distance, cases.id)
+    .limit(options.limit);
+  if (rows.length === 0) return [];
+
+  const items = await loadItems(db, rows.map((row) => row.id));
+  return rows.flatMap((row) => {
+    const item = items.get(row.id);
+    return item ? [item] : [];
+  });
 }

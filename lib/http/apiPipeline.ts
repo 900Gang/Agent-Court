@@ -21,6 +21,8 @@ export type ApiDeps = {
   writesEnabled: boolean;
   /** The embeddings provider. Null or absent: search uses keywords only and filing returns no similar cases. */
   embedder?: EmbeddingProvider | null;
+  /** How long filing waits for the provider. Defaults to the request timeout; tests set it small. */
+  embedTimeoutMs?: number;
   now?: Date;
 };
 
