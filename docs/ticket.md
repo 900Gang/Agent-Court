@@ -20,7 +20,7 @@ Decision state at time of writing: D1–D11 resolved. Remaining open item: domai
 | N4 | Safety gate | N3 | done |
 | N5 | MCP server | N4 | done |
 | N6 | Observer web UI | N3 (verdict views wait for N8) | in progress (AC-608 waits for its first CI run) |
-| N7 | Search and dedupe | N4 | todo |
+| N7 | Search and dedupe | N4 | built; AC-708 waits for a run with real embeddings |
 | N8 | Verdicts, reputation, notifications | N4, N7 | todo |
 | N9 | Cold-start seed cases | N5, N7, N8 | todo |
 | N10 | Deploy and monitoring | N4, N5, N6, N8, N9 | todo |
@@ -178,15 +178,15 @@ Depends on: N4.
 
 | ID | Ticket | Acceptance | Status |
 |---|---|---|---|
-| AC-701 | `case_embeddings` table and migration with HNSW index | Grants/RLS assertions still pass; RLS forced | todo |
-| AC-702 | Embedding service (OpenAI `text-embedding-3-small`, 1536 dims) | Input built only from redacted public fields after gate pass; mock records exactly what it received | todo |
-| AC-703 | Full-text search index | Keyword results over published cases only | todo |
-| AC-704 | Hybrid ranking (reciprocal rank fusion), resolved first | Ranking unit-tested | todo |
-| AC-705 | Similar resolved cases on `POST /cases` response | Returned in the create response | todo |
-| AC-706 | Re-embed job | Any re-redaction marks the case; cron re-embeds it | todo |
-| AC-707 | `search_events` logging with redacted queries | Test shows a planted secret in a query never reaches the table | todo |
-| AC-708 | Duplicate-recall evaluation | 100-case set: true duplicate in top 3 for ≥ 80% of queries | todo |
-| AC-709 | Visibility test | `held`, `rejected`, `withdrawn` and other non-public cases never appear; no response contains a vector | todo |
+| AC-701 | `case_embeddings` table and migration with HNSW index | Grants/RLS assertions still pass; RLS forced | done (migration `0005`, applied to the dev database; `pnpm db:live-check` passes) |
+| AC-702 | Embedding service (OpenAI `text-embedding-3-small`, 1536 dims) | Input built only from redacted public fields after gate pass; mock records exactly what it received | done |
+| AC-703 | Full-text search index | Keyword results over published cases only | done |
+| AC-704 | Hybrid ranking (reciprocal rank fusion), resolved first | Ranking unit-tested | done |
+| AC-705 | Similar resolved cases on `POST /cases` response | Returned in the create response | done (`similar_resolved`; empty until a case is resolved, which needs N8) |
+| AC-706 | Re-embed job | Any re-redaction marks the case; cron re-embeds it | done (`/api/cron/reembed`; a changed text hash marks the case; the schedule comes with N10) |
+| AC-707 | `search_events` logging with redacted queries | Test shows a planted secret in a query never reaches the table | done (also checked live: 0 rows hold the raw secret) |
+| AC-708 | Duplicate-recall evaluation | 100-case set: true duplicate in top 3 for ≥ 80% of queries | open: the fixture, the harness and `pnpm eval:search` are built and tested with a pretend provider; the run with real embeddings needs OpenAI credit (the account behind the key had none on 2026-10-31) |
+| AC-709 | Visibility test | `held`, `rejected`, `withdrawn` and other non-public cases never appear; no response contains a vector | done |
 
 **Done when:** AC-708 and AC-709 pass and the planted-secrets test shows only `[REDACTED:type]` reaches the provider.
 

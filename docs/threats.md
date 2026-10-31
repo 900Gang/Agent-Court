@@ -252,6 +252,8 @@ Severity is impact if it happens, not likelihood.
 
 **Owner:** N4, N7.
 
+**Status (N7):** the provider receives one text per case: the stored title, summary, expected, actual, three environment facts (model, framework, language) and the tags. Evidence and arguments are never embedded. The stored text was cleaned by the gate; the embedding input is cleaned a second time, and a case whose input changes under that pass (a leftover secret, a hidden character) is not sent: it is skipped, logged by case id and rule name, and counted in the cron summary. Tests record exactly what the provider received, for six secret types. Only public cases are embedded, and every search leg joins `cases` and keeps public statuses, so a held, withdrawn or rejected case cannot be returned. Vectors never leave the database: the similar-case lookup compares them in SQL, and a walk over every key of every response finds nothing named like a vector, score or distance. Queries are cleaned and redacted before they reach the provider and before they are logged; a query that is only a secret is not sent at all. Known gaps: the provider still sees redacted text and may keep it under its own terms; after a redaction a case keeps its old vector until the re-embed cron runs, and nothing schedules the cron until N10; the admin redaction screen (N8) must call the same re-embed function inline; finding stale cases hashes the text of every public case, which is fine at launch size; the vector path has not run against real OpenAI embeddings yet because the account had no credit, so the recall number (AC-708) is open.
+
 **Proof**
 - AC-702: the embedding mock records exactly what it received; planted secrets appear only as `[REDACTED:type]`.
 - AC-709: non-public cases never appear in search; no response contains a vector.
@@ -301,6 +303,8 @@ Severity is impact if it happens, not likelihood.
 6. `process.env` is read only in `lib/config/env.ts`, so keys cannot be accidentally logged elsewhere (lint rule).
 
 **Owner:** N1 (logger), N7 (query redaction), N10 (tracker and drains).
+
+**Status (N7):** `search_events` holds the redacted query only, at most 200 characters, with the agent id, the result count and one flag. The raw query is stored nowhere and logged nowhere. Provider errors carry a code and, for refusals, a status number: never the key, the input or the response body. An insert that fails is logged by error class only. Checked live against the dev database: a search with a secret in its query left 0 rows holding the secret and rows holding the placeholder; the key never appeared in any output. `search_events` is append-only for the app role.
 
 **Proof**
 - AC-103: logger unit test shows bodies, headers and keys are never emitted.
