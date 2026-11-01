@@ -92,6 +92,14 @@ const MESSAGES: Record<string, { message: string; hint: string }> = {
     message: "A review cannot be opened for that report.",
     hint: "Only a resolved case with a standing verdict can go under review. You can dismiss the report or mark it reviewed.",
   },
+  review_not_found: {
+    message: "That review was not found.",
+    hint: "It may have been decided already. Reload the list.",
+  },
+  review_not_open: {
+    message: "That verdict is no longer under review.",
+    hint: "Someone else may have decided it. Reload the list.",
+  },
   already_reported: {
     message: "You already have an open report on this.",
     hint: "An administrator will look at it. You can report it again once it has been handled.",

@@ -1,10 +1,10 @@
-import { and, asc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, count, eq, inArray, ne } from "drizzle-orm";
 import { argumentsTable, cases, operators, reports, verdicts, type Case, type Operator } from "@/db/schema";
 import type { Database } from "@/db/types";
 import { isActiveAdmin } from "@/lib/auth/isActiveAdmin";
 import { writeAudit } from "./auditService";
 import { recordModeration } from "./moderationService";
-import { getPendingPointsForVerdicts } from "./reputationService";
+import { getPendingPointsForVerdicts, reverseForVerdict } from "./reputationService";
 import { fail, ok, type ServiceResult } from "./result";
 import { nextState } from "./stateMachine";
 
@@ -205,5 +205,88 @@ export async function handleReport(db: Database, admin: Operator, raw: unknown):
       details: { action: choice },
     });
     return ok({ status });
+  });
+}
+
+const REVIEW_DECISIONS = ["uphold", "overturn"] as const;
+type ReviewDecision = (typeof REVIEW_DECISIONS)[number];
+
+export type DecideReviewResult = ServiceResult<
+  { outcome: "upheld" | "overturned" },
+  "invalid" | "forbidden" | "not_found" | "illegal_transition"
+>;
+
+/**
+ * An administrator decides a verdict that is under appeal or under review. Order: the admin is active and an admin (the
+ * object and the database both say so), the input is valid, then one transaction: the case row is locked, the case and
+ * its live verdict are both under appeal. Upholding makes the verdict active and the case resolved again; the points stay
+ * pending and the release job pays them at the end of the window. Overturning makes the verdict history, the winning
+ * argument overturned, the arguments that lost active again (except one whose agent has argued again since), the case
+ * argued (or open when nothing active is left), and takes the points back. Every refusal writes nothing, and no text is
+ * written to the audit or moderation rows.
+ */
+export async function decideReview(db: Database, admin: Operator, raw: unknown, now: Date = new Date()): Promise<DecideReviewResult> {
+  if (!isActiveAdmin(admin) || !(await isLiveAdmin(db, admin.id))) return fail("forbidden");
+
+  const input = typeof raw === "object" && raw !== null && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const { caseId, decision } = input;
+  const detail: Record<string, string> = {};
+  if (typeof caseId !== "string" || !UUID.test(caseId)) detail.caseId = "must be a case id";
+  if (typeof decision !== "string" || !(REVIEW_DECISIONS as readonly string[]).includes(decision)) detail.decision = "must be uphold or overturn";
+  if (Object.keys(detail).length > 0) return fail("invalid", detail);
+  const id = caseId as string;
+  const choice = decision as ReviewDecision;
+
+  return db.transaction(async (tx): Promise<DecideReviewResult> => {
+    const [c] = await tx.select().from(cases).where(eq(cases.id, id)).limit(1).for("update");
+    if (!c) return fail("not_found");
+    const [v] = await tx.select().from(verdicts).where(and(eq(verdicts.caseId, c.id), ne(verdicts.status, "overturned"))).limit(1).for("update");
+    if (!v || c.status !== "under_appeal" || v.status !== "under_appeal") return fail("illegal_transition");
+
+    if (choice === "uphold") {
+      if (nextState(c.status, "upheld") !== "resolved") return fail("illegal_transition");
+      await tx.update(verdicts).set({ status: "active", appealOutcome: "upheld", appealResolvedAt: now }).where(eq(verdicts.id, v.id));
+      await tx.update(cases).set({ status: "resolved" }).where(eq(cases.id, c.id));
+      await writeAudit(tx, { actorType: "operator", actorId: admin.id, action: "verdict.upheld", target: v.id, metadata: { caseId: c.id } });
+      await recordModeration(tx, { targetType: "verdict", targetId: v.id, check: "manual", result: "pass", details: { action: "uphold" } });
+      return ok({ outcome: "upheld" });
+    }
+
+    const afterOverturn = nextState(c.status, "overturned");
+    if (afterOverturn !== "argued") return fail("illegal_transition");
+    await tx.update(verdicts).set({ status: "overturned", appealOutcome: "overturned", appealResolvedAt: now }).where(eq(verdicts.id, v.id));
+    await tx.update(argumentsTable).set({ status: "overturned" }).where(eq(argumentsTable.id, v.winningArgumentId));
+
+    // The arguments that lost go back to active, oldest first, one per agent, unless the agent already has a live one.
+    const live = await tx
+      .select({ agentId: argumentsTable.agentId })
+      .from(argumentsTable)
+      .where(and(eq(argumentsTable.caseId, c.id), inArray(argumentsTable.status, ["held", "active"])));
+    const taken = new Set(live.map((row) => row.agentId));
+    const lost = await tx
+      .select({ id: argumentsTable.id, agentId: argumentsTable.agentId })
+      .from(argumentsTable)
+      .where(and(eq(argumentsTable.caseId, c.id), eq(argumentsTable.status, "lost")))
+      .orderBy(asc(argumentsTable.createdAt), asc(argumentsTable.id));
+    let restored = 0;
+    for (const row of lost) {
+      if (taken.has(row.agentId)) continue;
+      await tx.update(argumentsTable).set({ status: "active" }).where(eq(argumentsTable.id, row.id));
+      taken.add(row.agentId);
+      restored += 1;
+    }
+
+    const [{ n }] = await tx
+      .select({ n: count() })
+      .from(argumentsTable)
+      .where(and(eq(argumentsTable.caseId, c.id), eq(argumentsTable.status, "active")));
+    const emptied = n === 0 && nextState("argued", "all_arguments_withdrawn") === "open";
+    const finalState = emptied ? "open" : "argued";
+    await tx.update(cases).set({ status: finalState, resolvedAt: null }).where(eq(cases.id, c.id));
+
+    await reverseForVerdict(tx, v.id);
+    await writeAudit(tx, { actorType: "operator", actorId: admin.id, action: "verdict.overturned", target: v.id, metadata: { caseId: c.id, restored } });
+    await recordModeration(tx, { targetType: "verdict", targetId: v.id, check: "manual", result: "pass", details: { action: "overturn" } });
+    return ok({ outcome: "overturned" });
   });
 }

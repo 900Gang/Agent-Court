@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { moderateCore } from "@/lib/admin/actionsCore";
-import { handleReportCore } from "@/lib/admin/reviewCore";
+import { decideReviewCore, handleReportCore } from "@/lib/admin/reviewCore";
 import { buildActionDeps } from "@/lib/dashboard/context";
 
 const field = (formData: FormData, name: string): string => {
@@ -29,4 +29,11 @@ export async function reportFormAction(formData: FormData): Promise<void> {
   revalidatePath("/admin/reports");
   revalidatePath("/admin/appeals");
   redirect(result.ok ? "/admin/reports" : `/admin/reports?error=${encodeURIComponent(result.error.code)}`);
+}
+
+// Plain form post: on failure it comes back with ?error=<code>.
+export async function decideReviewFormAction(formData: FormData): Promise<void> {
+  const result = await decideReviewCore(await buildActionDeps(), { caseId: field(formData, "caseId"), decision: field(formData, "decision") });
+  revalidatePath("/admin/appeals");
+  redirect(result.ok ? "/admin/appeals" : `/admin/appeals?error=${encodeURIComponent(result.error.code)}`);
 }

@@ -9,7 +9,7 @@ import type { AppealListItem, ReportListItem } from "@/lib/services/reviewServic
 
 vi.mock("@/lib/admin/reviewData", () => ({ loadReports: vi.fn(), loadAppeals: vi.fn() }));
 vi.mock("@/lib/auth/requireAdmin", () => ({ requireAdmin: vi.fn() }));
-vi.mock("@/app/admin/actions", () => ({ moderateFormAction: vi.fn(), reportFormAction: vi.fn() }));
+vi.mock("@/app/admin/actions", () => ({ moderateFormAction: vi.fn(), reportFormAction: vi.fn(), decideReviewFormAction: vi.fn() }));
 
 import AppealsPage from "@/app/admin/appeals/page";
 import ReportsPage from "@/app/admin/reports/page";
@@ -272,5 +272,61 @@ describe("the admin review code is guarded where it is built", () => {
     const source = withoutImports(read("app/admin/actions.ts"));
     expect(source).toContain("handleReportCore(");
     expect(source).not.toMatch(/\b(?:handleReport|listReports|decideReview)\(/);
+  });
+});
+
+describe("AppealItem: the decision forms", () => {
+  const view = (item: AppealListItem = appealItem()) => render(<AppealItem item={item} action={noop} />);
+
+  it("has an uphold form and an overturn form, each with the case id and the decision as hidden fields", () => {
+    const markup = view();
+    expect(markup.match(/<form/g)).toHaveLength(2);
+    expect(hiddenValues(markup, "caseId")).toEqual([uuid(7), uuid(7)]);
+    expect(hiddenValues(markup, "decision")).toEqual(["uphold", "overturn"]);
+    expect(markup).toMatch(/<button[^>]*type="submit"[^>]*>UPHOLD/);
+    expect(markup).toMatch(/<button[^>]*type="submit"[^>]*>OVERTURN/);
+  });
+
+  it("says in fixed words what each choice does", () => {
+    const body = text(view());
+    expect(body).toContain("Upholding keeps the verdict and its points.");
+    expect(body).toContain("Overturning removes the verdict, takes back its points and lets a new verdict follow.");
+  });
+
+  it("offers no form when the case id is not well-formed", () => {
+    const markup = view(appealItem({ caseId: '"><script>alert(1)</script>' }));
+    expect(markup).not.toContain("<form");
+    expectSafe(markup);
+  });
+
+  it("offers a form for a review opened from a report too", () => {
+    expect(view(appealItem({ origin: "review", appealReason: null })).match(/<form/g)).toHaveLength(2);
+  });
+});
+
+describe("the appeals page: decisions", () => {
+  it("gives every item its two forms", async () => {
+    loadAppeals.mockResolvedValue({ appeals: [appealItem(), appealItem({ caseId: uuid(8), verdictId: uuid(31) })], truncated: false });
+    const markup = render(await AppealsPage());
+    expect(markup.match(/<form/g)).toHaveLength(4);
+  });
+});
+
+describe("the review decision is guarded where it is built", () => {
+  const read = (file: string) => readFileSync(file, "utf8");
+  const withoutImports = (source: string) => source.replace(/^import[\s\S]*?;\n/gm, "");
+
+  it("checks the origin, then the admin, then calls the service", () => {
+    const source = withoutImports(read("lib/admin/reviewCore.ts"));
+    const body = source.slice(source.indexOf("export async function decideReviewCore"));
+    expect(body.indexOf("assertSameOrigin(")).toBeGreaterThan(-1);
+    expect(body.indexOf("assertSameOrigin(")).toBeLessThan(body.indexOf("isActiveAdmin("));
+    expect(body.indexOf("isActiveAdmin(")).toBeLessThan(body.indexOf("decideReview("));
+  });
+
+  it("the server action file calls the core and not the service", () => {
+    const source = withoutImports(read("app/admin/actions.ts"));
+    expect(source).toContain("decideReviewCore(");
+    expect(source).not.toMatch(/\bdecideReview\(/);
   });
 });
