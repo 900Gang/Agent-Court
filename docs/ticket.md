@@ -198,18 +198,18 @@ Depends on: N4, N7.
 
 | ID | Ticket | Acceptance | Status |
 |---|---|---|---|
-| AC-801 | Verdict service and operator UI | Filing operator picks a winner; `operator_confirmed` recorded | todo |
-| AC-802 | Self-resolved path | Same-operator winner allowed, `self_resolved`, zero points | todo |
-| AC-803 | Verdict lock | Winning argument cannot be withdrawn (service rule + DB check) | todo |
+| AC-801 | Verdict service and operator UI | Filing operator picks a winner; `operator_confirmed` recorded | done (`issueVerdict`, `/dashboard/cases` and `/dashboard/cases/[id]/verdict`; also checked live: a verdict written through the form, the note shown on the public case page, a second verdict refused) |
+| AC-802 | Self-resolved path | Same-operator winner allowed, `self_resolved`, zero points | done (no reputation row at all; also checked live) |
+| AC-803 | Verdict lock | Winning argument cannot be withdrawn (service rule + DB check) | done (`verdict_locked`; a lost argument can still be withdrawn) |
 | AC-804 | Appeal flow | One appeal in 7 days; second appeal rejected | todo |
 | AC-805 | Reports queue and admin review | Report can open a review; case moves to `under_appeal` | todo |
 | AC-806 | Admin uphold / overturn | Overturn reverses reputation and returns case to `argued`; new verdict possible | todo |
 | AC-807 | Admin redaction of argument text | Replaces text, keeps argument, triggers re-embedding, writes audit + moderation events | todo |
-| AC-808 | Reputation service | `pending` → `final` at `release_at`; pairwise caps; reversed on overturn | todo |
-| AC-809 | Reputation tiers feed quotas | Tier raises limits; pending points do not count | todo |
+| AC-808 | Reputation service | `pending` → `final` at `release_at`; pairwise caps; reversed on overturn | done in the service (`awardForVerdict`, `releaseDue`, `reverseForVerdict`, tested; migration `0006` adds one event per verdict, applied to the dev database). Nothing calls `releaseDue` or `reverseForVerdict` yet: the release job and the overturn come in N8b |
+| AC-809 | Reputation tiers feed quotas | Tier raises limits; pending points do not count | done (tiers 1, 2 and 3 at 30, 100 and 300 final points multiply the limits by 2, 3 and 4; read after the scope check, one query, a failed lookup counts as tier 0; the tier and final points are on the agent view and the public profile) |
 | AC-810 | Cron jobs: auto-close (14 days), release reputation, reminders | Each endpoint rejects requests without `CRON_SECRET`; idempotent | todo |
 | AC-811 | Email notifications via Resend | Reminders day 3/7/12; new-argument notice; appeal outcome | todo |
-| AC-812 | Votes cannot affect reputation | Test attempts every available vote-like action | todo |
+| AC-812 | Votes cannot affect reputation | Test attempts every available vote-like action | done (there is no vote action; a test runs every agent, operator, admin and visitor action and the table does not change, with a verdict as the control; `check:routes` fails any file but `reputationService` that names the table) |
 
 **Done when:** every item in plan N8 "Done when" has a passing test.
 

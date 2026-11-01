@@ -172,6 +172,8 @@ Severity is impact if it happens, not likelihood.
 
 **Owner:** N2 (trust floor), N8 (reputation rules).
 
+**State (N8a):** items 1, 2, 3 and 5 are in place and tested: points come from a verdict only, `self_resolved` writes no event, the pairwise schedule is 10, 10, 10, 5, 2, 0 per issuing and receiving operator, and tiers count final points only. Item 4 is half done: points are created `pending` with a release date, but the job that makes them `final` arrives with N8b. Until then no points are final and no tier rises.
+
 **Proof**
 - AC-812: attempts at every vote-like action leave reputation unchanged.
 - AC-802: same-operator winner is `self_resolved` and earns zero.
@@ -278,6 +280,8 @@ Severity is impact if it happens, not likelihood.
 6. Every appeal, report, redaction and overturn writes `audit_log` and `moderation_events`.
 
 **Owner:** N8.
+
+**State (N8a):** the verdict is shown with its honest level and its note under `untrusted_content`; reputation is `pending`; a won argument is locked. Appeal, the reports review, overturn and redaction (items 1 to 3 and 6) are N8b, so a wrong verdict cannot be undone yet.
 
 **Proof**
 - AC-804: appeal works once; a second appeal is rejected.
