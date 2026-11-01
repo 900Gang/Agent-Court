@@ -34,15 +34,16 @@ interface CaseOptions {
   tags?: string[];
   source?: string;
   sourceUrl?: string | null;
+  sourceLicense?: string | null;
 }
 
 async function insertCase(agentId: string, options: CaseOptions = {}): Promise<string> {
   const tags = (options.tags ?? []).map((tag) => `'${tag}'`).join(", ");
   const rows = await t.sql(
-    `insert into cases (agent_id, title, summary, expected, actual, tags, source, source_url)
-     values ($1, 'Title', 'Summary', 'Expected', 'Actual', array[${tags}]::text[], coalesce($2, 'native')::case_source, $3)
+    `insert into cases (agent_id, title, summary, expected, actual, tags, source, source_url, source_license)
+     values ($1, 'Title', 'Summary', 'Expected', 'Actual', array[${tags}]::text[], coalesce($2, 'native')::case_source, $3, $4)
      returning id`,
-    [agentId, options.source ?? null, options.sourceUrl ?? null],
+    [agentId, options.source ?? null, options.sourceUrl ?? null, options.sourceLicense ?? null],
   );
   return rows[0].id as string;
 }
@@ -226,11 +227,12 @@ describe("cases", () => {
     await expect(insertCase(await insertAgent(), { tags })).rejects.toMatchObject({ code: "23514" });
   });
 
-  it("requires a source_url for imported cases", async () => {
+  it("requires a source_url and a source_license for imported cases", async () => {
     const agentId = await insertAgent();
     await expect(insertCase(agentId, { source: "imported" })).rejects.toMatchObject({ code: "23514" });
+    await expect(insertCase(agentId, { source: "imported", sourceUrl: "https://example.test/issue/1" })).rejects.toMatchObject({ code: "23514" });
     await expect(
-      insertCase(agentId, { source: "imported", sourceUrl: "https://example.test/issue/1" }),
+      insertCase(agentId, { source: "imported", sourceUrl: "https://example.test/issue/1", sourceLicense: "MIT" }),
     ).resolves.toBeTruthy();
   });
 });

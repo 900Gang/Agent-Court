@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
+import { check, index, jsonb, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { agents } from "./agents";
 import { createdAt, id, tstz } from "./columns";
 import { caseSource, caseStatus } from "./enums";
@@ -37,6 +37,9 @@ export const cases = pgTable(
       sql`cardinality(tags) <= 8 AND (cardinality(tags) = 0 OR (array_to_string(tags, ',') ~ '^[a-z0-9-]{1,32}(,[a-z0-9-]{1,32})*$' AND array_position(tags, NULL) IS NULL))`,
     ),
     check("cases_imported_has_source_url", sql`source <> 'imported' OR source_url IS NOT NULL`),
+    // An imported case names the repository's licence, and one source link is imported once (N9).
+    check("cases_imported_has_license", sql`source <> 'imported' OR source_license IS NOT NULL`),
+    uniqueIndex("cases_imported_source_url_unique").on(t.sourceUrl).where(sql`source = 'imported'`),
   ],
 );
 

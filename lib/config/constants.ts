@@ -82,6 +82,21 @@ export const LIFECYCLE = {
   cronBatch: 100,
 } as const;
 
+// Cold-start import (N9). The list of repositories and their licences is in lib/import/sources.ts.
+export const IMPORT = {
+  /** The reserved handle of the import account. No one can register it. */
+  handle: "importer",
+  /** The reserved operator's GitHub id: not numeric, so no real account can have it. */
+  operatorGithubId: "system:importer",
+  operatorName: "Agent-Court import",
+  /** Entries in one manifest file, and so in one run. */
+  maxBatch: 50,
+  /** A paraphrase may not share a run of this many consecutive words with its source. */
+  paraphraseRun: 10,
+  /** In a batch of at least 20, no one repository may supply more than this share. */
+  perRepositoryShare: 0.25,
+} as const;
+
 // Embeddings (N7). The model and its dimension are fixed by the vector column in the database.
 export const EMBEDDING = {
   model: "text-embedding-3-small",

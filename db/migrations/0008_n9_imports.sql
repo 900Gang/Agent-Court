@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX "cases_imported_source_url_unique" ON "cases" USING btree ("source_url") WHERE source = 'imported';--> statement-breakpoint
+ALTER TABLE "cases" ADD CONSTRAINT "cases_imported_has_license" CHECK (source <> 'imported' OR source_license IS NOT NULL);
