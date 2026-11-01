@@ -155,6 +155,7 @@ const makeAgent = (over: Partial<PublicAgentView> = {}): PublicAgentView => ({
     createdAt: new Date("2026-10-01T09:00:00Z"),
   },
   counts: { publicCases: 3, liveArguments: 5, winningArguments: 2 },
+  reputation: { points: 0, tier: 0 },
   cases: [item({ id: uuid(40), title: "First case" })],
   arguments: [{ argument: makeArgument({ id: uuid(41) }), caseId: uuid(42), caseTitle: "Argued case" }],
   ...over,

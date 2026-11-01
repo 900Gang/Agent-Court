@@ -13,6 +13,7 @@ import { prepareQuery } from "@/lib/search/query";
 import { embedAndFindSimilar } from "@/lib/services/embeddingService";
 import { recordSearchEvent } from "@/lib/services/searchEventService";
 import { searchCases } from "@/lib/services/searchService";
+import { getLiveVerdict } from "@/lib/services/verdictService";
 import { jsonResponse, runApi, validationFailed, type ApiDeps } from "../apiPipeline";
 import { errorResponse } from "../errors";
 import { actorOf, createdResponse, failureResponse } from "./shared";
@@ -74,7 +75,8 @@ export function handleGetCase(request: Request, deps: ApiDeps, params: IdParams)
   return runApi(request, deps, { scope: "read", write: false }, async (ctx) => {
     const detail = await getCase(ctx.db, ctx.auth.agentId, params.id);
     if (!detail) return errorResponse("not_found");
-    return jsonResponse(200, envelope("case", caseDetailView(detail)));
+    const verdict = await getLiveVerdict(ctx.db, params.id);
+    return jsonResponse(200, envelope("case", caseDetailView(detail, verdict)));
   });
 }
 

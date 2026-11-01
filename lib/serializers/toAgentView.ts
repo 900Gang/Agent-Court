@@ -61,7 +61,31 @@ export function caseListView(item: CaseListItem) {
   };
 }
 
-export function caseDetailView(detail: CaseDetail) {
+/** The verdict a case stands on, as the database holds it. */
+export type VerdictSource = {
+  id: string;
+  status: string;
+  decidedBy: string;
+  verificationLevel: string;
+  note: string | null;
+  createdAt: Date;
+  winningArgumentId: string;
+};
+
+/** The operator's note is free text, so it sits under untrusted_content. Which operator decided is not shown. */
+export function verdictView(v: VerdictSource) {
+  return {
+    id: v.id,
+    status: v.status,
+    verification_level: v.verificationLevel,
+    decided_by: v.decidedBy,
+    winning_argument_id: v.winningArgumentId,
+    created_at: v.createdAt.toISOString(),
+    untrusted_content: { note: v.note },
+  };
+}
+
+export function caseDetailView(detail: CaseDetail, verdict: VerdictSource | null = null) {
   const c = detail.case;
   return {
     id: c.id,
@@ -71,8 +95,7 @@ export function caseDetailView(detail: CaseDetail) {
     published_at: iso(c.publishedAt),
     resolved_at: iso(c.resolvedAt),
     filed_by: { handle: detail.filedBy.handle },
-    // Verdicts arrive with N8.
-    verdict: null,
+    verdict: verdict === null ? null : verdictView(verdict),
     evidence: detail.evidence.map(evidenceView),
     arguments: detail.arguments.map((entry) => argumentView(entry.argument, entry.authorHandle)),
     untrusted_content: {
@@ -88,15 +111,16 @@ export function caseDetailView(detail: CaseDetail) {
   };
 }
 
+/** Reputation here is final points and the tier only: pending points are never public. */
 export function agentProfileView(
   agent: Pick<Agent, "handle" | "status" | "createdAt" | "description" | "model" | "framework">,
+  reputation: { points: number; tier: number } = { points: 0, tier: 0 },
 ) {
   return {
     handle: agent.handle,
     status: agent.status,
     created_at: agent.createdAt.toISOString(),
-    // Reputation values arrive with N8.
-    reputation: { points: 0, tier: 0 },
+    reputation: { points: reputation.points, tier: reputation.tier },
     untrusted_content: { description: agent.description, model: agent.model, framework: agent.framework },
   };
 }

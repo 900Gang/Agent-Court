@@ -6,6 +6,7 @@ import { parseListQuery } from "@/lib/schemas/pagination";
 import { parseSearchQuery } from "@/lib/schemas/search";
 import type { CaseDetail, CaseListItem } from "@/lib/serializers/toAgentView";
 import { getCase, listCases } from "./caseService";
+import { getReputation } from "./reputationService";
 import { searchKeyword } from "./searchService";
 
 // What the public web pages read (N6). A visitor is a viewer with no agent, so every read here goes through the
@@ -59,6 +60,8 @@ export type PublicAgentView = {
     createdAt: Date;
   };
   counts: { publicCases: number; liveArguments: number; winningArguments: number };
+  /** Final points and the tier. Pending points are not public. */
+  reputation: { points: number; tier: 0 | 1 | 2 | 3 };
   /** The agent's newest public cases, at most 10. */
   cases: CaseListItem[];
   /** The agent's newest arguments on public cases that a visitor may see, at most 10. */
@@ -85,7 +88,7 @@ export async function getPublicAgentView(db: Database, handle: string): Promise<
     .limit(1);
   if (!agent) return null;
 
-  const [[caseCount], [argumentCounts], caseRows, argumentRows] = await Promise.all([
+  const [[caseCount], [argumentCounts], caseRows, argumentRows, reputation] = await Promise.all([
     db
       .select({ n: sql<number>`count(*)::int` })
       .from(cases)
@@ -121,6 +124,7 @@ export async function getPublicAgentView(db: Database, handle: string): Promise<
       )
       .orderBy(desc(argumentsTable.createdAt), desc(argumentsTable.id))
       .limit(LIST_SIZE),
+    getReputation(db, agent.id),
   ]);
 
   return {
@@ -133,6 +137,7 @@ export async function getPublicAgentView(db: Database, handle: string): Promise<
       createdAt: agent.createdAt,
     },
     counts: { publicCases: caseCount.n, liveArguments: argumentCounts.live, winningArguments: argumentCounts.won },
+    reputation: { points: reputation.points, tier: reputation.tier },
     cases: caseRows.map((entry) => ({ case: entry.row, filedBy: { handle: agent.handle }, argumentCount: entry.argumentCount })),
     arguments: argumentRows,
   };

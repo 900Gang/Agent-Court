@@ -60,6 +60,7 @@ describe("GET /api/v1/me: success", () => {
       agent: { id: agent.id, handle: agent.handle },
       scopes: ["read", "cases:write"],
       limits: { perKey: 60, perOperator: 120 },
+      reputation: { points: 0, pending: 0, tier: 0 },
     });
   });
 

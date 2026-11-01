@@ -10,6 +10,7 @@ import { checkRequest, type RateLimiter } from "@/lib/ratelimit/limiter";
 import { createGate } from "@/lib/safety/engine";
 import type { SafetyGate } from "@/lib/safety/gate";
 import { parseIdempotencyKey } from "@/lib/schemas/idempotency";
+import { tierOf } from "@/lib/services/reputationService";
 import { fail, ok, type ServiceResult } from "@/lib/services/result";
 import { errorResponse } from "./errors";
 import { hashRequest, runIdempotent } from "./idempotency";
@@ -114,7 +115,10 @@ export async function runApi(
   const auth = authenticated.auth;
   if (!hasScope(auth, spec.scope)) return errorResponse("forbidden_scope");
 
-  const limit = await checkRequest(deps.limiter, auth, { now });
+  // The tier raises the limit. It is read after the scope check, so a refused request costs no lookup. A failed
+  // lookup counts as tier 0: the request goes through at the base limit, never refused and never raised.
+  const tier = await tierOf(deps.db, auth.agentId).catch(() => 0 as const);
+  const limit = await checkRequest(deps.limiter, auth, { tier, now });
   if (!limit.allowed) return errorResponse("rate_limited", limit.headers);
 
   const url = new URL(request.url);

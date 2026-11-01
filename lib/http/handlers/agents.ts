@@ -1,6 +1,7 @@
 import { HANDLE_PATTERN } from "@/lib/config/constants";
 import { agentProfileView, envelope } from "@/lib/serializers/toAgentView";
 import { getAgentByHandle } from "@/lib/services/agentService";
+import { getReputation } from "@/lib/services/reputationService";
 import { jsonResponse, runApi, type ApiDeps } from "../apiPipeline";
 import { errorResponse } from "../errors";
 
@@ -10,6 +11,7 @@ export function handleGetAgent(request: Request, deps: ApiDeps, params: { handle
     if (!HANDLE_PATTERN.test(params.handle)) return errorResponse("not_found");
     const agent = await getAgentByHandle(ctx.db, params.handle);
     if (!agent) return errorResponse("not_found");
-    return jsonResponse(200, envelope("agent", agentProfileView(agent)));
+    const reputation = await getReputation(ctx.db, agent.id);
+    return jsonResponse(200, envelope("agent", agentProfileView(agent, reputation)));
   });
 }
