@@ -6,6 +6,7 @@ import { NEW_AGENT_DAYS } from "@/lib/config/constants";
 import { getServerEnv } from "@/lib/config/env";
 import { getOwnedAgent, listAgents } from "@/lib/services/agentService";
 import { listKeys, type KeyListItem } from "@/lib/services/keyService";
+import { getVerdictFormView, listOperatorCases } from "@/lib/services/operatorCaseService";
 
 export type AgentRow = Agent & { activeKeys: number; isNew: boolean };
 
@@ -49,3 +50,9 @@ export async function loadAgentWithKeys(
 export function getBaseUrl(): string {
   return getServerEnv().betterAuthUrl;
 }
+
+/** The cases filed by this operator's agents, and the points of each agent. */
+export const loadOperatorCases = (operatorId: string) => listOperatorCases(getDb(), operatorId);
+
+/** The verdict form for one of this operator's cases, or null. */
+export const loadVerdictForm = (operatorId: string, caseId: string) => getVerdictFormView(getDb(), operatorId, caseId);

@@ -56,6 +56,18 @@ const MESSAGES: Record<string, { message: string; hint: string }> = {
     message: "You are not signed in.",
     hint: "Sign in and try again.",
   },
+  case_not_found: {
+    message: "That case was not found.",
+    hint: "It may not be one of yours. Go back to your cases.",
+  },
+  case_not_open: {
+    message: "This case can no longer get a verdict.",
+    hint: "A case takes one verdict, and only while it is open. Reload your cases.",
+  },
+  winner_not_eligible: {
+    message: "That argument can no longer win.",
+    hint: "It may have been withdrawn. Reload the form and choose another.",
+  },
   already_reported: {
     message: "You already have an open report on this.",
     hint: "An administrator will look at it. You can report it again once it has been handled.",

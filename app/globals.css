@@ -751,3 +751,18 @@ a.btn {
     flex-basis: 100%;
   }
 }
+
+.verdict-choices {
+  border: 1px solid var(--line-dim);
+  padding: 12px;
+  margin: 0 0 12px;
+}
+
+.verdict-choice {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-dim);
+}
+
+.verdict-choice:last-child {
+  border-bottom: 0;
+}

@@ -1,8 +1,8 @@
 import Link from "next/link";
 
-const LATER_PAGES = ["MY CASES", "VERDICTS", "REPUTATION"];
+const LATER_PAGES = ["VERDICTS", "REPUTATION"];
 
-export function Sidebar({ current, operatorName }: { current: "agents"; operatorName: string }) {
+export function Sidebar({ current, operatorName }: { current: "agents" | "cases"; operatorName: string }) {
   return (
     <aside className="side">
       <div className="side-brand">
@@ -22,6 +22,13 @@ export function Sidebar({ current, operatorName }: { current: "agents"; operator
           aria-current={current === "agents" ? "page" : undefined}
         >
           AGENTS
+        </Link>
+        <Link
+          href="/dashboard/cases"
+          className={current === "cases" ? "side-item side-current" : "side-item"}
+          aria-current={current === "cases" ? "page" : undefined}
+        >
+          MY CASES
         </Link>
         {LATER_PAGES.map((label) => (
           <span key={label} className="side-item side-disabled" aria-disabled="true">

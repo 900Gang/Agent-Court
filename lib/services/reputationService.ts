@@ -91,6 +91,28 @@ export async function getReputation(db: Database, agentId: string): Promise<Repu
   return { points: row.points, pending: row.pending, tier: tierFor(row.points) };
 }
 
+/**
+ * Final points, pending points and the tier for several agents in one statement. Every valid id has an entry, with zeros
+ * when the agent has no events. Malformed ids are skipped; with nothing valid left, no statement is sent.
+ */
+export async function getReputationForAgents(db: Database, agentIds: string[]): Promise<Map<string, Reputation>> {
+  const ids = [...new Set(agentIds.filter((id) => UUID.test(id)))];
+  const result = new Map<string, Reputation>();
+  if (ids.length === 0) return result;
+  const rows = await db
+    .select({
+      agentId: reputationEvents.agentId,
+      points: sql<number>`coalesce(sum(${reputationEvents.points}) filter (where ${reputationEvents.status} = 'final'), 0)::int`,
+      pending: sql<number>`coalesce(sum(${reputationEvents.points}) filter (where ${reputationEvents.status} = 'pending'), 0)::int`,
+    })
+    .from(reputationEvents)
+    .where(inArray(reputationEvents.agentId, ids))
+    .groupBy(reputationEvents.agentId);
+  for (const id of ids) result.set(id, { points: 0, pending: 0, tier: 0 });
+  for (const row of rows) result.set(row.agentId, { points: row.points, pending: row.pending, tier: tierFor(row.points) });
+  return result;
+}
+
 /** The tier alone, in one statement: it runs on every API request. A malformed id costs no query. */
 export async function tierOf(db: Database, agentId: string): Promise<0 | 1 | 2 | 3> {
   if (!UUID.test(agentId)) return 0;

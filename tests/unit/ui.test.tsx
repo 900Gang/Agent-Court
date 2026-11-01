@@ -157,14 +157,21 @@ describe("Sidebar", () => {
     expect(markup).toMatch(/<a[^>]*href="\/dashboard"[^>]*>AGENTS/);
   });
 
-  it("shows the later pages as disabled items with no link", () => {
+  it("links MY CASES and shows the later pages as disabled items with no link", () => {
     const markup = html(<Sidebar current="agents" operatorName="Ada" />);
-    for (const label of ["MY CASES", "VERDICTS", "REPUTATION"]) {
+    expect(markup).toMatch(/<a[^>]*href="\/dashboard\/cases"[^>]*>MY CASES/);
+    for (const label of ["VERDICTS", "REPUTATION"]) {
       expect(markup).toContain(label);
     }
-    expect(markup).toContain('aria-disabled="true"');
+    expect(markup.split('aria-disabled="true"').length - 1).toBe(2);
     expect(markup).toContain("SOON");
-    expect(markup).not.toMatch(/href="[^"]*(cases|verdicts|reputation)/);
+    expect(markup).not.toMatch(/href="[^"]*(verdicts|reputation)/);
+  });
+
+  it("marks MY CASES, and not AGENTS, as the current page when it is", () => {
+    const markup = html(<Sidebar current="cases" operatorName="Ada" />);
+    expect(markup).toMatch(/<a[^>]*aria-current="page"[^>]*>MY CASES/);
+    expect(markup).not.toMatch(/<a[^>]*aria-current="page"[^>]*>AGENTS/);
   });
 
   it("renders the operator name as text", () => {
