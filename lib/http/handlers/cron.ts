@@ -1,18 +1,20 @@
 import { getDb } from "@/db/client";
 import type { Database } from "@/db/types";
-import { EMBEDDING, SEARCH_TUNING } from "@/lib/config/constants";
+import { EMBEDDING, LIFECYCLE, SEARCH_TUNING } from "@/lib/config/constants";
 import { getServerEnv } from "@/lib/config/env";
 import type { EmbeddingProvider } from "@/lib/embeddings/provider";
 import { getEmbeddingProvider } from "@/lib/embeddings/server";
 import { createGate } from "@/lib/safety/engine";
 import type { SafetyGate } from "@/lib/safety/gate";
 import { reembedStale } from "@/lib/services/embeddingService";
+import { closeIdleCases } from "@/lib/services/lifecycleService";
+import { releaseDue } from "@/lib/services/reputationService";
 import { rescanHeld } from "@/lib/services/rescanService";
 import { jsonResponse } from "../apiPipeline";
 import { verifyCronRequest } from "../cronAuth";
 import { errorResponse } from "../errors";
 
-export type CronDeps = { db: Database; gate: SafetyGate; secret: string | null; embedder?: EmbeddingProvider | null };
+export type CronDeps = { db: Database; gate: SafetyGate; secret: string | null; embedder?: EmbeddingProvider | null; /** The time the jobs use. Absent in production; tests set it. */ now?: Date };
 
 /** The real wiring for the cron route files. */
 export function getCronDeps(): CronDeps {
@@ -49,4 +51,26 @@ export async function handleCronReembed(request: Request, deps: CronDeps): Promi
     deadline: Date.now() + SEARCH_TUNING.cronBudgetMs,
   });
   return jsonResponse(200, { disabled: false, ...summary });
+}
+
+/**
+ * GET or POST /api/cron/auto-close. The secret is checked first, and every refusal is the same fixed 401. A correct call
+ * closes one batch of idle cases (open or argued, 14 days after publication, no verdict) and answers with counts only.
+ * The next scheduled call takes the next batch.
+ */
+export async function handleCronAutoClose(request: Request, deps: CronDeps): Promise<Response> {
+  if (!verifyCronRequest(request, deps.secret)) return errorResponse("unauthorized");
+  const summary = await closeIdleCases(deps.db, deps.now ?? new Date(), { limit: LIFECYCLE.cronBatch });
+  return jsonResponse(200, summary);
+}
+
+/**
+ * GET or POST /api/cron/release-reputation. The secret is checked first, and every refusal is the same fixed 401. A
+ * correct call makes every pending event whose time has come final, unless its verdict is under appeal or overturned, and
+ * answers with the count only. This is the one thing that lets an agent's tier rise.
+ */
+export async function handleCronReleaseReputation(request: Request, deps: CronDeps): Promise<Response> {
+  if (!verifyCronRequest(request, deps.secret)) return errorResponse("unauthorized");
+  const released = await releaseDue(deps.db, deps.now ?? new Date());
+  return jsonResponse(200, { released });
 }

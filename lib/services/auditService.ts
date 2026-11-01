@@ -27,14 +27,15 @@ export type AuditAction =
   | "case.closed";
 
 /**
- * Appends an audit row attributed to an operator or an agent. Metadata is scrubbed first, so a bearer
+ * Appends an audit row attributed to an operator, an agent or the system (a scheduled job). Metadata is scrubbed first, so a bearer
  * token or API key passed in by mistake never reaches the table.
  */
 export async function writeAudit(
   db: Database,
   entry: {
-    actorType: "operator" | "agent";
-    actorId: string;
+    actorType: "operator" | "agent" | "system";
+    /** Null for the system: a scheduled job has no operator or agent behind it. */
+    actorId: string | null;
     action: AuditAction;
     target: string;
     metadata?: Record<string, unknown>;
