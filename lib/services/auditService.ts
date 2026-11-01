@@ -17,7 +17,14 @@ export type AuditAction =
   | "moderation.rejected"
   | "report.created"
   | "verdict.issued"
-  | "verdict.reversed";
+  | "verdict.reversed"
+  | "appeal.filed"
+  | "review.opened"
+  | "verdict.upheld"
+  | "verdict.overturned"
+  | "report.handled"
+  | "redaction.applied"
+  | "case.closed";
 
 /**
  * Appends an audit row attributed to an operator or an agent. Metadata is scrubbed first, so a bearer

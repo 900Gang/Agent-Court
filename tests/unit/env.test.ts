@@ -38,6 +38,8 @@ describe("parseServerEnv", () => {
       apiWritesEnabled: false,
       cronSecret: null,
       openAiApiKey: null,
+      resendApiKey: null,
+      emailFrom: null,
     });
   });
 
@@ -303,5 +305,75 @@ describe("parseServerEnv: CRON_SECRET", () => {
     const message = thrownMessage(() => parseServerEnv({ ...valid, CRON_SECRET: secret, NEXT_PUBLIC_LEAKED: secret }));
     expect(message).toContain("NEXT_PUBLIC_LEAKED");
     expect(message).not.toContain(secret);
+  });
+});
+
+describe("parseServerEnv: email", () => {
+  const key = "re_test_key_0123456789abcdef";
+  const from = "Agent-Court <court@example.com>";
+
+  it("is off, with both settings null, when neither is set", () => {
+    const env = parseServerEnv(valid);
+    expect(env.resendApiKey).toBeNull();
+    expect(env.emailFrom).toBeNull();
+  });
+
+  it("is on when both are set, with a plain address or a named one", () => {
+    expect(parseServerEnv({ ...valid, RESEND_API_KEY: key, EMAIL_FROM: from })).toMatchObject({ resendApiKey: key, emailFrom: from });
+    expect(parseServerEnv({ ...valid, RESEND_API_KEY: key, EMAIL_FROM: "court@example.com" }).emailFrom).toBe("court@example.com");
+  });
+
+  it("treats empty strings as not set", () => {
+    const env = parseServerEnv({ ...valid, RESEND_API_KEY: "", EMAIL_FROM: "" });
+    expect(env.resendApiKey).toBeNull();
+    expect(env.emailFrom).toBeNull();
+  });
+
+  it.each(["development", "test", "staging", "production"])("refuses one setting without the other in %s, naming the missing one and no value", (appEnv) => {
+    const base = {
+      ...valid,
+      APP_ENV: appEnv,
+      ...(appEnv === "production" ? { BETTER_AUTH_URL: "https://agent-court.example" } : {}),
+      ...(appEnv === "production" || appEnv === "staging"
+        ? {
+            UPSTASH_REDIS_REST_URL: "https://example-12345.upstash.io",
+            UPSTASH_REDIS_REST_TOKEN: "upstash-token-value-0123456789abcdef",
+            CRON_SECRET: "c".repeat(40),
+            OPENAI_API_KEY: "sk-test-openai-key-0123456789",
+          }
+        : {}),
+    };
+    const onlyKey = thrownMessage(() => parseServerEnv({ ...base, RESEND_API_KEY: key }));
+    expect(onlyKey).toContain("EMAIL_FROM");
+    expect(onlyKey).not.toContain(key);
+    const onlyFrom = thrownMessage(() => parseServerEnv({ ...base, EMAIL_FROM: from }));
+    expect(onlyFrom).toContain("RESEND_API_KEY");
+    expect(onlyFrom).not.toContain("court@example.com");
+  });
+
+  it.each(["not-an-address", "two@@example.com", "Name <>", "no spaces@example.com"])("refuses a sender address like %j without echoing it", (bad) => {
+    const message = thrownMessage(() => parseServerEnv({ ...valid, RESEND_API_KEY: key, EMAIL_FROM: bad }));
+    expect(message).toContain("EMAIL_FROM");
+    expect(message).not.toContain(bad);
+  });
+
+  it("does not require email, even in production", () => {
+    expect(() =>
+      parseServerEnv({
+        ...valid,
+        APP_ENV: "production",
+        BETTER_AUTH_URL: "https://agent-court.example",
+        UPSTASH_REDIS_REST_URL: "https://example-12345.upstash.io",
+        UPSTASH_REDIS_REST_TOKEN: "upstash-token-value-0123456789abcdef",
+        CRON_SECRET: "c".repeat(40),
+        OPENAI_API_KEY: "sk-test-openai-key-0123456789",
+      }),
+    ).not.toThrow();
+  });
+
+  it("refuses a NEXT_PUBLIC_ variable holding the mail key", () => {
+    const message = thrownMessage(() => parseServerEnv({ ...valid, RESEND_API_KEY: key, EMAIL_FROM: from, NEXT_PUBLIC_LEAKED: key }));
+    expect(message).toContain("NEXT_PUBLIC_LEAKED");
+    expect(message).not.toContain(key);
   });
 });

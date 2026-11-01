@@ -22,6 +22,10 @@ export interface ServerEnv {
   cronSecret: string | null;
   /** OpenAI key for embeddings. Null when unset: search then uses keywords only. Required in production and staging. */
   openAiApiKey: string | null;
+  /** Resend key for operator email. Null unless both this and EMAIL_FROM are set: without them nothing is sent. */
+  resendApiKey: string | null;
+  /** The sender address for operator email, as `name@host` or `Name <name@host>`. */
+  emailFrom: string | null;
 }
 
 export class EnvError extends Error {
@@ -45,7 +49,12 @@ const KEYS = [
   "API_WRITES_ENABLED",
   "CRON_SECRET",
   "OPENAI_API_KEY",
+  "RESEND_API_KEY",
+  "EMAIL_FROM",
 ] as const;
+
+// A bare address or a named one. A looser check would let a typo through to the provider.
+const SENDER_ADDRESS = /^(?:[^<>@\s]+@[^<>@\s]+\.[^<>@\s]+|[^<>]+ <[^<>@\s]+@[^<>@\s]+\.[^<>@\s]+>)$/;
 
 const FLAG_ON = ["on", "true", "1"];
 const FLAG_OFF = ["", "off", "false", "0"];
@@ -65,6 +74,8 @@ const schema = z
     API_WRITES_ENABLED: z.string().optional(),
     CRON_SECRET: z.string().min(32).optional(),
     OPENAI_API_KEY: z.string().min(1).optional(),
+    RESEND_API_KEY: z.string().min(1).optional(),
+    EMAIL_FROM: z.string().regex(SENDER_ADDRESS).optional(),
   })
   .superRefine((env, ctx) => {
     if (env.APP_ENV === "production" && !env.BETTER_AUTH_URL.startsWith("https://")) {
@@ -108,6 +119,14 @@ const schema = z
     // Without a key search still works on keywords, but a deployed app is meant to run with meaning-based search.
     if (deployed && env.OPENAI_API_KEY === undefined) {
       ctx.addIssue({ code: "custom", path: ["OPENAI_API_KEY"], message: "required in production and staging" });
+    }
+
+    // Email is optional, but half a setting is a typo: both or neither, in every environment.
+    for (const [present, other, name] of [
+      [env.RESEND_API_KEY !== undefined, env.EMAIL_FROM !== undefined, "EMAIL_FROM"],
+      [env.EMAIL_FROM !== undefined, env.RESEND_API_KEY !== undefined, "RESEND_API_KEY"],
+    ] as const) {
+      if (present && !other) ctx.addIssue({ code: "custom", path: [name], message: "required together" });
     }
 
     // The re-scan endpoint is open to anyone without it, so a deployed app must have one.
@@ -156,6 +175,7 @@ export function parseServerEnv(source: Record<string, string | undefined>): Serv
   if (env.UPSTASH_REDIS_REST_TOKEN) secrets.add(env.UPSTASH_REDIS_REST_TOKEN);
   if (env.CRON_SECRET) secrets.add(env.CRON_SECRET);
   if (env.OPENAI_API_KEY) secrets.add(env.OPENAI_API_KEY);
+  if (env.RESEND_API_KEY) secrets.add(env.RESEND_API_KEY);
   const leaked = Object.entries(source)
     .filter(([name, value]) => name.startsWith("NEXT_PUBLIC_") && value !== undefined && secrets.has(value))
     .map(([name]) => name);
@@ -179,6 +199,8 @@ export function parseServerEnv(source: Record<string, string | undefined>): Serv
     apiWritesEnabled: FLAG_ON.includes((env.API_WRITES_ENABLED ?? "").toLowerCase()),
     cronSecret: env.CRON_SECRET ?? null,
     openAiApiKey: env.OPENAI_API_KEY ?? null,
+    resendApiKey: env.RESEND_API_KEY ?? null,
+    emailFrom: env.EMAIL_FROM ?? null,
   };
 }
 

@@ -1,4 +1,4 @@
-import { LIMITS, REPORT, REPUTATION } from "@/lib/config/constants";
+import { LIFECYCLE, LIMITS, REPORT, REPUTATION } from "@/lib/config/constants";
 import type { GateContext, GateTarget } from "./gate";
 
 export type FieldKind = "prose" | "evidence_prompt" | "evidence_trace" | "evidence_other" | "tag" | "short";
@@ -57,5 +57,6 @@ export function describeField(
   }
   if (target === "report" && name === "reason") return { limit: REPORT.maxReason, kind: "prose" };
   if (target === "note" && name === "text") return { limit: REPUTATION.maxNote, kind: "prose" };
+  if (target === "appeal" && name === "text") return { limit: LIFECYCLE.maxAppeal, kind: "prose" };
   throw new Error("unknown gate field");
 }

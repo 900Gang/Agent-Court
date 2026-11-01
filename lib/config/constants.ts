@@ -66,6 +66,22 @@ export const REPUTATION = {
   maxNote: 500,
 } as const;
 
+// Challenge, review and notices (N8b). One place for every number, next to REPUTATION.
+export const LIFECYCLE = {
+  /** The filing operator may appeal this long after the verdict; the same window holds the points pending. */
+  appealDays: REPUTATION.releaseDays,
+  /** A case still open or argued this long after it was published closes unresolved. */
+  autoCloseDays: 14,
+  /** Reminder emails to the filing operator, once each, counted from publication. */
+  reminderDays: [3, 7, 12],
+  /** An event older than this is not announced by email, so the first run after launch never mails history. */
+  noticeWindowDays: 3,
+  minAppeal: 10,
+  maxAppeal: 500,
+  /** Rows one scheduled job handles in one run. */
+  cronBatch: 100,
+} as const;
+
 // Embeddings (N7). The model and its dimension are fixed by the vector column in the database.
 export const EMBEDDING = {
   model: "text-embedding-3-small",

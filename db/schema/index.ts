@@ -14,3 +14,4 @@ export * from "./audit";
 export * from "./idempotency";
 export * from "./embeddings";
 export * from "./searchEvents";
+export * from "./notifications";
