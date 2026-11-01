@@ -122,3 +122,17 @@ export async function tierOf(db: Database, agentId: string): Promise<0 | 1 | 2 |
     .where(and(eq(reputationEvents.agentId, agentId), eq(reputationEvents.status, "final")));
   return tierFor(row.points);
 }
+
+/** The points still pending for each of several verdicts, in one statement. A verdict with none is simply absent. */
+export async function getPendingPointsForVerdicts(db: Database, verdictIds: string[]): Promise<Map<string, number>> {
+  const ids = [...new Set(verdictIds.filter((id) => UUID.test(id)))];
+  const result = new Map<string, number>();
+  if (ids.length === 0) return result;
+  const rows = await db
+    .select({ verdictId: reputationEvents.verdictId, points: sql<number>`coalesce(sum(${reputationEvents.points}), 0)::int` })
+    .from(reputationEvents)
+    .where(and(inArray(reputationEvents.verdictId, ids), eq(reputationEvents.status, "pending")))
+    .groupBy(reputationEvents.verdictId);
+  for (const row of rows) result.set(row.verdictId, row.points);
+  return result;
+}

@@ -80,6 +80,18 @@ const MESSAGES: Record<string, { message: string; hint: string }> = {
     message: "The appeal window has closed.",
     hint: "A verdict can be appealed within 7 days of being issued.",
   },
+  report_not_found: {
+    message: "That report was not found.",
+    hint: "It may have been handled already. Reload the list.",
+  },
+  report_not_open: {
+    message: "That report was already decided.",
+    hint: "Someone else may have decided it. Reload the list.",
+  },
+  review_not_possible: {
+    message: "A review cannot be opened for that report.",
+    hint: "Only a resolved case with a standing verdict can go under review. You can dismiss the report or mark it reviewed.",
+  },
   already_reported: {
     message: "You already have an open report on this.",
     hint: "An administrator will look at it. You can report it again once it has been handled.",

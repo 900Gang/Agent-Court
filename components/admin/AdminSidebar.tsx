@@ -1,8 +1,14 @@
 import Link from "next/link";
 
-const LATER_PAGES = ["APPEALS", "REPORTS", "REDACT", "KILL SWITCH"];
+const LINKS = [
+  { key: "moderation", label: "MODERATION", href: "/admin/moderation" },
+  { key: "reports", label: "REPORTS", href: "/admin/reports" },
+  { key: "appeals", label: "APPEALS", href: "/admin/appeals" },
+] as const;
 
-export function AdminSidebar({ operatorName }: { operatorName: string }) {
+const LATER_PAGES = ["REDACT", "KILL SWITCH"];
+
+export function AdminSidebar({ operatorName, current }: { operatorName: string; current?: (typeof LINKS)[number]["key"] }) {
   return (
     <aside className="side">
       <div className="side-brand">
@@ -16,9 +22,16 @@ export function AdminSidebar({ operatorName }: { operatorName: string }) {
       </div>
 
       <nav aria-label="Admin">
-        <Link href="/admin/moderation" className="side-item side-current" aria-current="page">
-          MODERATION
-        </Link>
+        {LINKS.map((link) => (
+          <Link
+            key={link.key}
+            href={link.href}
+            className={current === link.key ? "side-item side-current" : "side-item"}
+            aria-current={current === link.key ? "page" : undefined}
+          >
+            {link.label}
+          </Link>
+        ))}
         {LATER_PAGES.map((label) => (
           <span key={label} className="side-item side-disabled" aria-disabled="true">
             {label}
