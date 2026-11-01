@@ -4,9 +4,10 @@ const LINKS = [
   { key: "moderation", label: "MODERATION", href: "/admin/moderation" },
   { key: "reports", label: "REPORTS", href: "/admin/reports" },
   { key: "appeals", label: "APPEALS", href: "/admin/appeals" },
+  { key: "redact", label: "REDACT", href: "/admin/redact" },
 ] as const;
 
-const LATER_PAGES = ["REDACT", "KILL SWITCH"];
+const LATER_PAGES = ["KILL SWITCH"];
 
 export function AdminSidebar({ operatorName, current }: { operatorName: string; current?: (typeof LINKS)[number]["key"] }) {
   return (

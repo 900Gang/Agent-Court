@@ -100,6 +100,14 @@ const MESSAGES: Record<string, { message: string; hint: string }> = {
     message: "That verdict is no longer under review.",
     hint: "Someone else may have decided it. Reload the list.",
   },
+  redact_target_not_found: {
+    message: "That text was not found.",
+    hint: "Check the kind, the id and the field.",
+  },
+  nothing_to_redact: {
+    message: "There is nothing to remove.",
+    hint: "The fragment is not in that field, or the field was already blanked.",
+  },
   already_reported: {
     message: "You already have an open report on this.",
     hint: "An administrator will look at it. You can report it again once it has been handled.",

@@ -223,7 +223,7 @@ describe("the appeals page", () => {
 });
 
 describe("AdminSidebar", () => {
-  const view = (current?: "moderation" | "reports" | "appeals") => render(<AdminSidebar operatorName="Ada" current={current} />);
+  const view = (current?: "moderation" | "reports" | "appeals" | "redact") => render(<AdminSidebar operatorName="Ada" current={current} />);
 
   it("links moderation, reports and appeals", () => {
     const markup = view();
@@ -238,11 +238,16 @@ describe("AdminSidebar", () => {
     expect(view()).not.toContain("aria-current");
   });
 
-  it("still shows the later pages as disabled items with no link", () => {
+  it("links REDACT and still shows the kill switch as a disabled item with no link", () => {
     const markup = view();
-    for (const label of ["REDACT", "KILL SWITCH"]) expect(markup).toContain(label);
-    expect(markup.split('aria-disabled="true"').length - 1).toBe(2);
-    expect(markup).not.toMatch(/href="[^"]*(redact|kill)/);
+    expect(markup).toMatch(/<a[^>]*href="\/admin\/redact"[^>]*>REDACT/);
+    expect(markup).toContain("KILL SWITCH");
+    expect(markup.split('aria-disabled="true"').length - 1).toBe(1);
+    expect(markup).not.toMatch(/href="[^"]*kill/);
+  });
+
+  it("marks REDACT as the current page when it is", () => {
+    expect(render(<AdminSidebar operatorName="Ada" current="redact" />)).toMatch(/<a[^>]*aria-current="page"[^>]*>REDACT/);
   });
 
   it("renders the operator name as text", () => {

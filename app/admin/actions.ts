@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { moderateCore } from "@/lib/admin/actionsCore";
+import { redactCore } from "@/lib/admin/redactCore";
 import { decideReviewCore, handleReportCore } from "@/lib/admin/reviewCore";
 import { buildActionDeps } from "@/lib/dashboard/context";
 
@@ -36,4 +37,17 @@ export async function decideReviewFormAction(formData: FormData): Promise<void> 
   const result = await decideReviewCore(await buildActionDeps(), { caseId: field(formData, "caseId"), decision: field(formData, "decision") });
   revalidatePath("/admin/appeals");
   redirect(result.ok ? "/admin/appeals" : `/admin/appeals?error=${encodeURIComponent(result.error.code)}`);
+}
+
+// Plain form post: on success it comes back with ?done=<characters removed>, on failure with ?error=<code>.
+export async function redactFormAction(formData: FormData): Promise<void> {
+  const result = await redactCore(await buildActionDeps(), {
+    targetType: field(formData, "targetType"),
+    targetId: field(formData, "targetId"),
+    field: field(formData, "field"),
+    fragment: field(formData, "fragment"),
+    blank: field(formData, "blank"),
+  });
+  revalidatePath("/admin/redact");
+  redirect(result.ok ? `/admin/redact?done=${result.value.removed}` : `/admin/redact?error=${encodeURIComponent(result.error.code)}`);
 }
