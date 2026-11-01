@@ -196,15 +196,27 @@ describe("new arguments", () => {
 });
 
 describe("appeal outcomes", () => {
-  async function decided(outcome: "upheld" | "overturned", resolvedAgoMs: number) {
+  async function decided(outcome: "upheld" | "overturned", resolvedAgoMs: number, appealed = true) {
     const filer = await filerAgent();
     const c = await f.insertCase(filer.actor.agentId, { status: "open" });
     const winner = await f.makeAgent();
     const argument = await f.insertArgument(c.id, winner.actor.agentId, "active", new Date(NOW.getTime() - 20 * DAY));
     const issued = f.unwrap(await issueVerdict(t.db, passGate, filer.operator, { caseId: c.id, winningArgumentId: argument.id }, new Date(NOW.getTime() - 9 * DAY)));
-    await t.sql(`update verdicts set appeal_outcome = $2, appeal_resolved_at = $3 where id = $1`, [issued.verdictId, outcome, new Date(NOW.getTime() - resolvedAgoMs).toISOString()]);
+    await t.sql(`update verdicts set appeal_outcome = $2, appeal_resolved_at = $3, appealed_at = $4 where id = $1`, [
+      issued.verdictId,
+      outcome,
+      new Date(NOW.getTime() - resolvedAgoMs).toISOString(),
+      appealed ? new Date(NOW.getTime() - resolvedAgoMs - DAY).toISOString() : null,
+    ]);
     return { filer, c };
   }
+
+  it("says nothing about a review an administrator opened from a report, because there was no appeal", async () => {
+    await decided("upheld", HOUR, false);
+    const mailer = createRecordingMailer();
+    expect(await send(mailer)).toMatchObject({ sent: 0 });
+    expect(mailer.messages).toHaveLength(0);
+  });
 
   it.each([
     ["upheld", "the verdict stands"],

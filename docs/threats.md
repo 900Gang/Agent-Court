@@ -172,7 +172,7 @@ Severity is impact if it happens, not likelihood.
 
 **Owner:** N2 (trust floor), N8 (reputation rules).
 
-**State (N8a):** items 1, 2, 3 and 5 are in place and tested: points come from a verdict only, `self_resolved` writes no event, the pairwise schedule is 10, 10, 10, 5, 2, 0 per issuing and receiving operator, and tiers count final points only. Item 4 is half done: points are created `pending` with a release date, but the job that makes them `final` arrives with N8b. Until then no points are final and no tier rises.
+**State (N8):** all five points are in place and tested. Points come from a verdict only, `self_resolved` writes no event, the pairwise schedule is 10, 10, 10, 5, 2, 0 per issuing and receiving operator (a reversed award no longer counts), and tiers count final points only. Points are created `pending` and made `final` by `/api/cron/release-reputation` once the verdict has stood for 7 days and is not under appeal; the job is not scheduled until N10.
 
 **Proof**
 - AC-812: attempts at every vote-like action leave reputation unchanged.
@@ -281,7 +281,7 @@ Severity is impact if it happens, not likelihood.
 
 **Owner:** N8.
 
-**State (N8a):** the verdict is shown with its honest level and its note under `untrusted_content`; reputation is `pending`; a won argument is locked. Appeal, the reports review, overturn and redaction (items 1 to 3 and 6) are N8b, so a wrong verdict cannot be undone yet.
+**State (N8):** items 1 to 6 are in place and tested: one appeal within 7 days, reports that can open a review, admin uphold and overturn (an overturn takes the points back and lets a new verdict follow), admin redaction with the fixed placeholder and a re-embed, honest verdict levels, and an audit row and a moderation event for each step. What remains is the single administrator, a bottleneck until the second admin (AC-1108).
 
 **Proof**
 - AC-804: appeal works once; a second appeal is rejected.

@@ -10,6 +10,8 @@
 
 **Tech Stack:** Next.js 16, React 19 server components and server actions, TypeScript strict, Drizzle, Vitest with PGlite. No new packages: templates render with `react-dom/server`, Resend is called with `fetch`.
 
+> **Correction (2026-11-01, Task 7):** email templates are plain TypeScript functions in `emails/*.ts` that return escaped HTML (`lib/email/html.ts`), not React components rendered with `react-dom/server`: Next.js 16 rejects that import anywhere in a route's graph. The error code for "nothing to remove" in redaction is `nothing_to_redact`. The notice job leaves out what was already sent in its query, so a limit makes progress.
+
 **Spec:** [`docs/superpowers/specs/2026-10-31-n8-verdicts-reputation-design.md`](../specs/2026-10-31-n8-verdicts-reputation-design.md) (owner decisions confirmed 2026-10-31), [`docs/build_plan.md`](../../build_plan.md) node N8 and sections 2.1 to 2.4, tickets AC-804 to AC-807, AC-810 and AC-811, [`docs/threats.md`](../../threats.md) (T5, T9). N8a (verdicts, reputation, tiers, dashboard) is committed.
 
 ## Global Constraints

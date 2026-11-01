@@ -139,6 +139,9 @@ export async function sendDueNotices(
     .innerJoin(operators, eq(operators.id, agents.operatorId))
     .where(
       and(
+        // Only an appeal is announced. A review an administrator opened from a report has no appeal behind it, and "your
+        // appeal was decided" would be untrue.
+        isNotNull(verdicts.appealedAt),
         isNotNull(verdicts.appealOutcome),
         isNotNull(verdicts.appealResolvedAt),
         gte(verdicts.appealResolvedAt, windowStart),
