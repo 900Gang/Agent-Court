@@ -2,6 +2,8 @@ import { and, eq, ne } from "drizzle-orm";
 import { agents, argumentsTable, cases, operators, verdicts, type Operator } from "@/db/schema";
 import type { Database } from "@/db/types";
 import { screenSafely, type SafetyGate } from "@/lib/safety/gate";
+import { appealDeadline } from "@/lib/lifecycle/rules";
+import { parseAppealInput } from "@/lib/schemas/appeal";
 import { parseVerdictInput } from "@/lib/schemas/verdict";
 import { writeAudit } from "./auditService";
 import { recordModeration } from "./moderationService";
@@ -133,4 +135,49 @@ export async function getLiveVerdict(db: Database, caseId: string): Promise<Live
     .where(and(eq(verdicts.caseId, caseId), ne(verdicts.status, "overturned")))
     .limit(1);
   return (row as LiveVerdict | undefined) ?? null;
+}
+
+export type AppealResult = ServiceResult<
+  { verdictId: string; caseId: string },
+  "invalid" | "not_found" | "operator_not_active" | "illegal_transition" | "already_appealed" | "appeal_window_closed"
+>;
+
+/**
+ * The filing operator appeals a verdict, once, within the appeal window. Order: the operator is active (read live), the
+ * input is valid, the reason passes the safety gate (`appeal` target), then one transaction: the case row is locked, it
+ * is the operator's own (else the answer is the same as for an unknown case), it has a live verdict, that verdict has
+ * not been appealed before, it is active on a resolved case, and the window is still open. The verdict and the case go
+ * under appeal, with one audit row and one moderation event, neither holding the reason. Pending points stay pending.
+ * Every refusal writes nothing.
+ */
+export async function appealVerdict(db: Database, gate: SafetyGate, operator: Operator, raw: unknown, now: Date = new Date()): Promise<AppealResult> {
+  if (!(await isActive(db, operator.id))) return fail("operator_not_active");
+
+  const parsed = parseAppealInput(raw);
+  if (!parsed.ok) return parsed;
+  const { caseId, reason } = parsed.value;
+
+  const decision = await screenSafely(gate, { target: "appeal", fields: { text: reason } });
+  if (decision.outcome !== "pass") return fail("invalid", { reason: NOTE_REFUSED });
+  const cleaned = decision.fields.text;
+
+  return db.transaction(async (tx): Promise<AppealResult> => {
+    const [c] = await tx.select().from(cases).where(eq(cases.id, caseId)).limit(1).for("update");
+    if (!c) return fail("not_found");
+    const [filer] = await tx.select({ operatorId: agents.operatorId }).from(agents).where(eq(agents.id, c.agentId)).limit(1);
+    if (!filer || filer.operatorId !== operator.id) return fail("not_found");
+
+    const [v] = await tx.select().from(verdicts).where(and(eq(verdicts.caseId, c.id), ne(verdicts.status, "overturned"))).limit(1).for("update");
+    if (!v) return fail("illegal_transition");
+    if (v.appealedAt !== null) return fail("already_appealed");
+    if (v.status !== "active" || nextState(c.status, "appeal") !== "under_appeal") return fail("illegal_transition");
+    if (now.getTime() > appealDeadline(v.createdAt).getTime()) return fail("appeal_window_closed");
+
+    await tx.update(verdicts).set({ status: "under_appeal", appealedAt: now, appealReason: cleaned }).where(eq(verdicts.id, v.id));
+    await tx.update(cases).set({ status: "under_appeal" }).where(eq(cases.id, c.id));
+
+    await writeAudit(tx, { actorType: "operator", actorId: operator.id, action: "appeal.filed", target: v.id, metadata: { caseId: c.id } });
+    await recordModeration(tx, { targetType: "verdict", targetId: v.id, check: "manual", result: "pass", details: { action: "appeal" } });
+    return ok({ verdictId: v.id, caseId: c.id });
+  });
 }

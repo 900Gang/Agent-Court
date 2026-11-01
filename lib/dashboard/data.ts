@@ -6,7 +6,7 @@ import { NEW_AGENT_DAYS } from "@/lib/config/constants";
 import { getServerEnv } from "@/lib/config/env";
 import { getOwnedAgent, listAgents } from "@/lib/services/agentService";
 import { listKeys, type KeyListItem } from "@/lib/services/keyService";
-import { getVerdictFormView, listOperatorCases } from "@/lib/services/operatorCaseService";
+import { getAppealFormView, getVerdictFormView, listOperatorCases } from "@/lib/services/operatorCaseService";
 
 export type AgentRow = Agent & { activeKeys: number; isNew: boolean };
 
@@ -56,3 +56,6 @@ export const loadOperatorCases = (operatorId: string) => listOperatorCases(getDb
 
 /** The verdict form for one of this operator's cases, or null. */
 export const loadVerdictForm = (operatorId: string, caseId: string) => getVerdictFormView(getDb(), operatorId, caseId);
+
+/** The appeal form for one of this operator's cases, or null. */
+export const loadAppealForm = (operatorId: string, caseId: string) => getAppealFormView(getDb(), operatorId, caseId);

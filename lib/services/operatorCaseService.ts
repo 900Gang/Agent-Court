@@ -1,6 +1,7 @@
-import { and, asc, count, desc, eq, inArray, isNull, min } from "drizzle-orm";
-import { agents, argumentsTable, cases, type Case } from "@/db/schema";
+import { and, asc, count, desc, eq, inArray, isNull, min, ne } from "drizzle-orm";
+import { agents, argumentsTable, cases, verdicts, type Case } from "@/db/schema";
 import type { Database } from "@/db/types";
+import { appealDeadline } from "@/lib/lifecycle/rules";
 import { getReputationForAgents } from "./reputationService";
 
 // What the operator's dashboard reads (N8a). Everything is scoped by the operator's id, which the caller takes from the
@@ -22,6 +23,8 @@ export type OperatorCaseRow = {
   argumentCount: number;
   /** When the oldest active argument was made, or null when there is none. */
   oldestArgumentAt: Date | null;
+  /** The verdict the case stands on (an overturned one is history and not shown), or null. */
+  verdict: { status: "active" | "under_appeal"; createdAt: Date; appealed: boolean } | null;
 };
 
 export type OperatorAgentRow = { id: string; handle: string; points: number; pending: number; tier: 0 | 1 | 2 | 3 };
@@ -47,12 +50,17 @@ export async function listOperatorCases(
         agentHandle: agents.handle,
         argumentCount: count(argumentsTable.id),
         oldestArgumentAt: min(argumentsTable.createdAt),
+        verdictId: verdicts.id,
+        verdictStatus: verdicts.status,
+        verdictCreatedAt: verdicts.createdAt,
+        verdictAppealedAt: verdicts.appealedAt,
       })
       .from(cases)
       .innerJoin(agents, eq(agents.id, cases.agentId))
       .leftJoin(argumentsTable, and(eq(argumentsTable.caseId, cases.id), eq(argumentsTable.status, "active")))
+      .leftJoin(verdicts, and(eq(verdicts.caseId, cases.id), ne(verdicts.status, "overturned")))
       .where(eq(agents.operatorId, operatorId))
-      .groupBy(cases.id, agents.handle)
+      .groupBy(cases.id, agents.handle, verdicts.id)
       .orderBy(desc(cases.createdAt), desc(cases.id))
       .limit(CASE_LIMIT),
     db
@@ -64,7 +72,13 @@ export async function listOperatorCases(
 
   const reputation = await getReputationForAgents(db, agentRows.map((row) => row.id));
   return {
-    cases: caseRows,
+    cases: caseRows.map(({ verdictId, verdictStatus, verdictCreatedAt, verdictAppealedAt, ...row }) => ({
+      ...row,
+      verdict:
+        verdictId === null || verdictStatus === null || verdictCreatedAt === null
+          ? null
+          : { status: verdictStatus as "active" | "under_appeal", createdAt: verdictCreatedAt, appealed: verdictAppealedAt !== null },
+    })),
     agents: agentRows.map((row) => {
       const r = reputation.get(row.id) ?? { points: 0, pending: 0, tier: 0 as const };
       return { id: row.id, handle: row.handle, points: r.points, pending: r.pending, tier: r.tier };
@@ -109,4 +123,33 @@ export async function getVerdictFormView(db: Database, operatorId: string, caseI
     .orderBy(asc(argumentsTable.createdAt), asc(argumentsTable.id));
   if (rows.length === 0) return null;
   return { caseId: c.id, title: c.title, arguments: rows };
+}
+
+export type AppealFormView = { caseId: string; title: string; verdictAt: Date; deadline: Date };
+
+/**
+ * What the appeal form needs: the case title, when the verdict was issued and the deadline. Null for anything that cannot
+ * be appealed now: not the operator's case (the same as an unknown case), no live verdict, a verdict that is not active
+ * or was appealed already, or a deadline that has passed. One statement.
+ */
+export async function getAppealFormView(db: Database, operatorId: string, caseId: string, now: Date = new Date()): Promise<AppealFormView | null> {
+  if (!UUID.test(operatorId) || !UUID.test(caseId)) return null;
+  const [row] = await db
+    .select({
+      id: cases.id,
+      title: cases.title,
+      status: cases.status,
+      verdictAt: verdicts.createdAt,
+      verdictStatus: verdicts.status,
+      appealedAt: verdicts.appealedAt,
+    })
+    .from(cases)
+    .innerJoin(agents, eq(agents.id, cases.agentId))
+    .innerJoin(verdicts, and(eq(verdicts.caseId, cases.id), ne(verdicts.status, "overturned")))
+    .where(and(eq(cases.id, caseId), eq(agents.operatorId, operatorId)))
+    .limit(1);
+  if (!row || row.status !== "resolved" || row.verdictStatus !== "active" || row.appealedAt !== null) return null;
+  const deadline = appealDeadline(row.verdictAt);
+  if (now.getTime() > deadline.getTime()) return null;
+  return { caseId: row.id, title: row.title, verdictAt: row.verdictAt, deadline };
 }

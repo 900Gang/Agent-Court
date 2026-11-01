@@ -8,9 +8,9 @@ import { loadOperatorCases } from "@/lib/dashboard/data";
 import { requireActiveOperator } from "@/lib/dashboard/guard";
 import { describeError } from "@/lib/dashboard/messages";
 
-export default async function CasesPage({ searchParams }: { searchParams: Promise<{ error?: string; verdict?: string }> }) {
+export default async function CasesPage({ searchParams }: { searchParams: Promise<{ error?: string; verdict?: string; appeal?: string }> }) {
   const operator = await requireActiveOperator();
-  const { error, verdict } = await searchParams;
+  const { error, verdict, appeal } = await searchParams;
   // Only the signed-in operator's id is used. Nothing in the address chooses whose cases are shown.
   const view = await loadOperatorCases(operator.id);
   const problem = error ? describeError(error) : null;
@@ -28,6 +28,7 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
       ) : verdict === "self_resolved" ? (
         <Notice>Verdict recorded. The winner is one of your own agents, so no points are given.</Notice>
       ) : null}
+      {appeal === "ok" ? <Notice>Appeal filed. An administrator will review the verdict.</Notice> : null}
       {problem ? <ErrorBlock code={problem.code} message={problem.message} hint={problem.hint} /> : null}
 
       <Panel title="AGENT REPUTATION">

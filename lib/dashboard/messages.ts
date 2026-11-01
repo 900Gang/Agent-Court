@@ -68,6 +68,18 @@ const MESSAGES: Record<string, { message: string; hint: string }> = {
     message: "That argument can no longer win.",
     hint: "It may have been withdrawn. Reload the form and choose another.",
   },
+  case_not_resolved: {
+    message: "This case has no verdict that can be appealed.",
+    hint: "Only a resolved case can be appealed. Reload your cases.",
+  },
+  already_appealed: {
+    message: "This verdict has already been appealed.",
+    hint: "A verdict can be appealed once. An administrator will decide.",
+  },
+  appeal_window_closed: {
+    message: "The appeal window has closed.",
+    hint: "A verdict can be appealed within 7 days of being issued.",
+  },
   already_reported: {
     message: "You already have an open report on this.",
     hint: "An administrator will look at it. You can report it again once it has been handled.",

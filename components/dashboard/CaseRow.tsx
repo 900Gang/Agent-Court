@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { EscapedText } from "@/components/EscapedText";
 import { Chip } from "@/components/ui/Chip";
+import { appealDeadline } from "@/lib/lifecycle/rules";
 import type { OperatorCaseRow } from "@/lib/services/operatorCaseService";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -10,7 +11,7 @@ function ageText(oldest: Date | null, now: Date): string {
   if (oldest === null) return "—";
   const days = Math.floor((now.getTime() - oldest.getTime()) / DAY_MS);
   if (days <= 0) return "today";
-  return days === 1 ? "1 day" : `${days} days`;
+  return days === 1 ? "1 day" : days + " days";
 }
 
 function variantOf(status: OperatorCaseRow["status"]): "ok" | "warn" | "off" {
@@ -21,7 +22,14 @@ function variantOf(status: OperatorCaseRow["status"]): "ok" | "warn" | "off" {
 
 /** One case in the operator's list. The title and handle are user text, so they go through EscapedText. */
 export function CaseRow({ row, now }: { row: OperatorCaseRow; now: Date }) {
-  const canChoose = (row.status === "open" || row.status === "argued") && row.argumentCount > 0 && UUID.test(row.id);
+  const validId = UUID.test(row.id);
+  const canChoose = (row.status === "open" || row.status === "argued") && row.argumentCount > 0 && validId;
+  const verdict = row.verdict;
+  const deadline = verdict === null ? null : appealDeadline(verdict.createdAt);
+  const canAppeal =
+    row.status === "resolved" && verdict !== null && verdict.status === "active" && !verdict.appealed && deadline !== null && now.getTime() <= deadline.getTime() && validId;
+  const awaitingAdmin = row.status === "under_appeal";
+
   return (
     <tr>
       <td>
@@ -37,9 +45,18 @@ export function CaseRow({ row, now }: { row: OperatorCaseRow; now: Date }) {
       <td>{ageText(row.oldestArgumentAt, now)}</td>
       <td>
         {canChoose ? (
-          <Link className="btn" href={`/dashboard/cases/${row.id}/verdict`}>
+          <Link className="btn" href={"/dashboard/cases/" + row.id + "/verdict"}>
             CHOOSE WINNER
           </Link>
+        ) : canAppeal && deadline !== null ? (
+          <>
+            <Link className="btn" href={"/dashboard/cases/" + row.id + "/appeal"}>
+              APPEAL
+            </Link>{" "}
+            <small>{"until " + deadline.toISOString().slice(0, 10)}</small>
+          </>
+        ) : awaitingAdmin ? (
+          <small>AWAITING ADMIN</small>
         ) : null}
       </td>
     </tr>

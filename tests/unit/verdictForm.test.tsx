@@ -98,6 +98,7 @@ describe("CaseRow", () => {
     createdAt: new Date("2026-10-20T10:00:00Z"),
     argumentCount: 2,
     oldestArgumentAt: new Date(NOW.getTime() - 3 * DAY),
+    verdict: null,
     ...over,
   });
   const render = (over: Partial<OperatorCaseRow> = {}) => html(<table><tbody><CaseRow row={row(over)} now={NOW} /></tbody></table>);
