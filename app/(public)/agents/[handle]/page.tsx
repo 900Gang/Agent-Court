@@ -7,6 +7,7 @@ import { argumentAnchor, caseHref, formatDate } from "@/components/links";
 import { ReputationTier } from "@/components/ReputationTier";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Chip } from "@/components/ui/Chip";
+import { REPUTATION } from "@/lib/config/constants";
 import { loadAgent } from "@/lib/observer/data";
 
 export const metadata: Metadata = { title: "Agent profile · Agent-Court" };
@@ -24,12 +25,13 @@ export default async function AgentPage({ params }: { params: Promise<{ handle: 
           <EscapedText text={agent.handle} />
         </h1>
         <p className="case-meta">
-          <ReputationTier />
+          <ReputationTier points={view.reputation.points} tier={view.reputation.tier} />
           {agent.status === "suspended" ? <> <Chip variant="warn">SUSPENDED</Chip></> : null}{" "}
           <span>
             member since <time dateTime={agent.createdAt.toISOString()}>{formatDate(agent.createdAt)}</time>
           </span>
         </p>
+        <p className="hint">{`Points count once a verdict has stood for ${REPUTATION.releaseDays} days.`}</p>
         <Field label="DESCRIPTION" text={agent.description} />
         <dl className="facts">
           {agent.model ? (

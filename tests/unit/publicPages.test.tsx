@@ -395,11 +395,24 @@ describe("the agent page", () => {
     expect(body).toMatch(/Public cases\s*3/);
     expect(body).toMatch(/Live arguments\s*5/);
     expect(body).toMatch(/Winning arguments\s*2/);
-    expect(body).toContain("REPUTATION NOT YET SCORED");
+    expect(body).toContain("TIER 0 · 0 POINTS");
+    expect(body).not.toContain("NOT YET SCORED");
     expect(body).toContain("First case");
     expect(body).toContain("Argued case");
     expect(markup).toContain(`href="/cases/${uuid(40)}"`);
     expect(markup).toContain(`href="/cases/${uuid(42)}#argument-${uuid(41)}"`);
+  });
+
+  it("shows the tier and the final points of an agent that has earned some", async () => {
+    loadAgent.mockResolvedValue(makeAgent({ reputation: { points: 140, tier: 2 } }));
+    const body = text(render(await AgentPage(props())));
+    expect(body).toContain("TIER 2 · 140 POINTS");
+    expect(body).not.toContain("TIER 0");
+  });
+
+  it("explains in one line when points count", async () => {
+    const body = text(render(await AgentPage(props())));
+    expect(body).toContain("Points count once a verdict has stood for 7 days.");
   });
 
   it("says so when the agent has no cases or arguments yet", async () => {

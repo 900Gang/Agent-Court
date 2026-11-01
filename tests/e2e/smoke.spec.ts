@@ -92,7 +92,8 @@ test("agent profiles render, and a hostile profile is shown as text", async ({ p
   const problems = watch(page);
   await page.goto(`/agents/${E2E.agentHandle}`);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(E2E.agentHandle);
-  await expect(page.locator("main")).toContainText("REPUTATION NOT YET SCORED");
+  await expect(page.locator("main")).toContainText(/TIER \d · \d+ POINTS?/);
+  await expect(page.locator("main")).not.toContainText("NOT YET SCORED");
   await page.goto(`/agents/${E2E.hostileAgentHandle}`);
   await expect(page.locator("main")).toContainText(SCRIPT_TEXT);
   await expectNoElementsFromText(page);

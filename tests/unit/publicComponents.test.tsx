@@ -333,8 +333,43 @@ describe("AgentBadge and ReputationTier", () => {
     expect(markup).not.toContain("<a ");
   });
 
-  it("says reputation is not yet scored", () => {
-    expect(html(<ReputationTier />)).toContain("REPUTATION NOT YET SCORED");
+  it("shows the tier and the final points", () => {
+    expect(html(<ReputationTier points={140} tier={2} />)).toContain("TIER 2 · 140 POINTS");
+    expect(html(<ReputationTier points={30} tier={1} />)).toContain("TIER 1 · 30 POINTS");
+    expect(html(<ReputationTier points={300} tier={3} />)).toContain("TIER 3 · 300 POINTS");
+  });
+
+  it("says POINT for exactly one and shows a new agent as tier 0 with 0 points", () => {
+    const one = html(<ReputationTier points={1} tier={0} />);
+    expect(one).toContain("TIER 0 · 1 POINT");
+    expect(one).not.toContain("1 POINTS");
+    expect(html(<ReputationTier points={0} tier={0} />)).toContain("TIER 0 · 0 POINTS");
+  });
+
+  it("is quiet at tier 0 and marked ok above it", () => {
+    expect(html(<ReputationTier points={0} tier={0} />)).toContain("chip-off");
+    expect(html(<ReputationTier points={30} tier={1} />)).toContain("chip-ok");
+  });
+
+  it.each([
+    ["points not a number", Number.NaN, 1],
+    ["points negative", -5, 1],
+    ["points a fraction", 2.5, 1],
+    ["points infinite", Number.POSITIVE_INFINITY, 1],
+    ["points beyond a safe integer", 1e21, 1],
+    ["tier above 3", 30, 7],
+    ["tier negative", 30, -1],
+    ["tier a fraction", 30, 1.5],
+  ])("fails closed to tier 0 and 0 points when %s", (_name, points, tier) => {
+    const markup = html(<ReputationTier points={points} tier={tier as 0} />);
+    expect(markup).toContain("TIER 0 · 0 POINTS");
+    expect(markup).not.toContain("NaN");
+  });
+
+  it("no longer says reputation is not yet scored, and never mentions pending points", () => {
+    const markup = html(<ReputationTier points={30} tier={1} />);
+    expect(markup).not.toContain("NOT YET SCORED");
+    expect(markup.toLowerCase()).not.toContain("pending");
   });
 });
 
