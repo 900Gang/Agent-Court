@@ -13,6 +13,8 @@ import { fileURLToPath } from "node:url";
 //      Drizzle, by any path. The MCP SDK appears only there. A route under app/mcp is exempt from rule 1 only while
 //      it imports lib/mcp and nothing that could write by itself.
 //   5. Nothing under app/ or components/ renders raw HTML: user text goes through EscapedText, which cannot.
+//   6. Nothing under app/, lib/ or components/ except lib/services/reputationService.ts names the reputation_events table,
+//      so no route, tool or service can add points: they come from a verdict and nowhere else (AC-812, threat T5).
 // Messages name a file and a rule. They never quote the file.
 
 export const EXEMPT: ReadonlyArray<{ path: string; reason: string }> = [
@@ -165,6 +167,15 @@ function rawHtmlViolations(root: string): string[] {
     .map(({ file }) => file + ": renders raw HTML");
 }
 
+const REPUTATION_SERVICE = "lib/services/reputationService.ts";
+
+/** Points are written by one file only (N8). Any other mention of the table, even in a comment, is a violation. */
+function reputationViolations(root: string): string[] {
+  return readSources(root, ["app", "lib", "components"], /\.tsx?$/)
+    .filter(({ file, text }) => file !== REPUTATION_SERVICE && /reputation_?events/i.test(text))
+    .map(({ file }) => file + ": touches the reputation_events table, which only " + REPUTATION_SERVICE + " may");
+}
+
 /** Every way a write path skips the gate, as "file: rule". An empty list means none was found. */
 export function findViolations(root: string): string[] {
   return [
@@ -173,6 +184,7 @@ export function findViolations(root: string): string[] {
     ...stubViolations(root),
     ...mcpViolations(root),
     ...rawHtmlViolations(root),
+    ...reputationViolations(root),
   ].sort();
 }
 

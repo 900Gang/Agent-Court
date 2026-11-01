@@ -446,3 +446,78 @@ describe("findViolations: raw HTML", () => {
     expect(findViolations(repo)).toEqual([]);
   });
 });
+
+describe("findViolations: who may touch reputation events (AC-812)", () => {
+  const message = (file: string) => `${file}: touches the reputation_events table, which only lib/services/reputationService.ts may`;
+  const IMPORTS = 'import { reputationEvents } from "@/db/schema";\nexport const x = reputationEvents;\n';
+
+  it.each([
+    "app/api/v1/things/route.ts",
+    "app/(public)/page.tsx",
+    "components/Badge.tsx",
+    "lib/http/handlers/cases.ts",
+    "lib/serializers/toAgentView.ts",
+    "lib/dashboard/data.ts",
+    "lib/admin/queue.ts",
+    "lib/services/caseService.ts",
+    "lib/services/verdictService.ts",
+    "lib/mcp/tools.ts",
+  ])("reports %s for using the table", (file) => {
+    expect(findViolations(tree({ [file]: IMPORTS }))).toContain(message(file));
+  });
+
+  it("reports the table name in a query string and in any capitalisation", () => {
+    const root = tree({
+      "lib/http/a.ts": 'export const q = "select * from reputation_events";\n',
+      "lib/http/b.ts": "export const ReputationEvents = 1;\n",
+      "lib/http/c.ts": "export const reputationevents = 1;\n",
+    });
+    const violations = findViolations(root);
+    for (const file of ["lib/http/a.ts", "lib/http/b.ts", "lib/http/c.ts"]) expect(violations).toContain(message(file));
+  });
+
+  it("reports a mention in a comment too: the rule is about the name, not about use", () => {
+    expect(findViolations(tree({ "lib/http/a.ts": "// do not touch reputation_events here\nexport const x = 1;\n" }))).toContain(message("lib/http/a.ts"));
+  });
+
+  it("allows the reputation service itself", () => {
+    expect(findViolations(tree({ "lib/services/reputationService.ts": IMPORTS }))).toEqual([]);
+  });
+
+  it("gives no other file of the same name the same allowance", () => {
+    const root = tree({ "lib/http/reputationService.ts": IMPORTS, "app/reputationService.ts": IMPORTS });
+    const violations = findViolations(root);
+    expect(violations).toContain(message("lib/http/reputationService.ts"));
+    expect(violations).toContain(message("app/reputationService.ts"));
+  });
+
+  it("does not mind files that talk about reputation without naming the table", () => {
+    const root = tree({
+      "lib/http/a.ts": 'import { getReputation, tierOf } from "@/lib/services/reputationService";\nexport const x = [getReputation, tierOf];\n',
+      "lib/http/b.ts": 'import { REPUTATION } from "@/lib/config/constants";\nexport const reputation = { points: 0 };\n',
+      "components/ReputationTier.tsx": "export function ReputationTier() { return null; }\n",
+    });
+    expect(findViolations(root)).toEqual([]);
+  });
+
+  it("only looks under app, lib and components", () => {
+    const root = tree({ "db/schema/reputation.ts": IMPORTS, "tests/x.test.ts": IMPORTS, "scripts/x.ts": IMPORTS, "db/seed.ts": IMPORTS });
+    expect(findViolations(root)).toEqual([]);
+  });
+
+  it("says it once per file, however many times the name appears", () => {
+    const root = tree({ "lib/http/a.ts": "reputationEvents; reputationEvents; reputation_events;\n" });
+    expect(findViolations(root).filter((line) => line.startsWith("lib/http/a.ts:"))).toEqual([message("lib/http/a.ts")]);
+  });
+
+  it("names the file and the rule, never the content", () => {
+    const root = tree({ "lib/http/a.ts": `// ${MARKER} reputationEvents\n` });
+    const text = findViolations(root).join("\n");
+    expect(text).toContain("lib/http/a.ts");
+    expect(text).not.toContain(MARKER);
+  });
+
+  it("finds nothing outside the reputation service in this repository", () => {
+    expect(findViolations(repo).filter((line) => line.includes("reputation_events"))).toEqual([]);
+  });
+});
