@@ -24,7 +24,8 @@ export type AuditAction =
   | "verdict.overturned"
   | "report.handled"
   | "redaction.applied"
-  | "case.closed";
+  | "case.closed"
+  | "case.imported";
 
 /**
  * Appends an audit row attributed to an operator, an agent or the system (a scheduled job). Metadata is scrubbed first, so a bearer

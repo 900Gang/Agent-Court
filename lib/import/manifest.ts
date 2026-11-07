@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { IMPORT, IMPORT_TAGS, LIMITS } from "@/lib/config/constants";
+import { IMPORT, IMPORT_TAGS, LIMITS, REPUTATION } from "@/lib/config/constants";
 import { detailFromIssues, requiredText } from "@/lib/schemas/fields";
 import { fail, ok, type ServiceResult } from "@/lib/services/result";
 import { licenseOf, parseGithubUrl } from "./sources";
@@ -12,7 +12,10 @@ function plainText(max: number) {
   return requiredText(max).refine((value) => !RAW_HTML.test(value), { error: "must not contain HTML" });
 }
 
-const needsText = { error: (issue: { input?: unknown }) => (issue.input === undefined ? "is required" : "must be text") };
+/** The longest manifest note: 200 characters are left for a newline and the link to the fix. */
+export const NOTE_MAX = REPUTATION.maxNote - 200;
+
+const needsText ={ error: (issue: { input?: unknown }) => (issue.input === undefined ? "is required" : "must be text") };
 
 const tagsSchema = z
   .array(
@@ -39,7 +42,8 @@ const entrySchema = z.strictObject({
   language: plainText(40),
   fixReasoning: plainText(LIMITS.argumentField),
   fixChange: plainText(LIMITS.argumentField),
-  note: plainText(500),
+  // The import adds the fix link on a second line, and the whole note must fit the note limit.
+  note: plainText(NOTE_MAX),
 });
 
 export type ManifestEntry = z.output<typeof entrySchema> & { license: string };

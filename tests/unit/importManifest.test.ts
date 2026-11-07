@@ -35,7 +35,7 @@ const TEXT_FIELDS: Array<[string, number]> = [
   ["actual", 2000],
   ["fixReasoning", 8000],
   ["fixChange", 8000],
-  ["note", 500],
+  ["note", 300],
   ["framework", 80],
   ["language", 40],
 ];
