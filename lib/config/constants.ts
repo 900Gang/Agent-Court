@@ -97,6 +97,44 @@ export const IMPORT = {
   perRepositoryShare: 0.25,
 } as const;
 
+// ===== 1. lib/config/constants.ts — add right after the IMPORT = { ... } as const; block =====
+
+/** The topics an imported case may be tagged with. A fixed list, so a manifest cannot smuggle text into a tag. */
+export const IMPORT_TAGS = [
+  "tool-calling",
+  "structured-output",
+  "retries",
+  "loops",
+  "memory",
+  "streaming",
+  "protocol",
+  "schema",
+  "state",
+  "handoff",
+  "prompting",
+  "parsing",
+  "timeout",
+  "serialization",
+  "concurrency",
+  "async",
+  "callbacks",
+  "tracing",
+  "context-window",
+  "validation",
+  "configuration",
+  "authentication",
+  "error-handling",
+  "type-errors",
+  "versioning",
+  "model-provider",
+  "vector-store",
+  "embeddings",
+  "multi-agent",
+  "human-in-the-loop",
+  "sandbox",
+  "cost",
+] as const;
+
 // Embeddings (N7). The model and its dimension are fixed by the vector column in the database.
 export const EMBEDDING = {
   model: "text-embedding-3-small",
