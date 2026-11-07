@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { agents, argumentsTable, cases, evidence, operators, verdicts } from "@/db/schema";
 import type { Database } from "@/db/types";
+import { IMPORT } from "@/lib/config/constants";
 import { E2E, HOSTILE } from "./data";
 
 // Test data for the end-to-end run. The rows go in directly, so the pages, not the safety gate, are what is under
@@ -16,6 +17,22 @@ export async function insertE2eFixtures(db: Database): Promise<void> {
   await db
     .insert(operators)
     .values({ id: E2E.operatorId, githubId: "e2e:operator", displayName: "E2E Operator", status: "active" })
+    .onConflictDoNothing();
+
+  // The import account and one imported case with its argument and verdict, as the import service writes them.
+  await db
+    .insert(operators)
+    .values({ id: E2E.importerOperatorId, githubId: IMPORT.operatorGithubId, displayName: IMPORT.operatorName, status: "active" })
+    .onConflictDoNothing();
+  await db
+    .insert(agents)
+    .values({
+      id: E2E.importerAgentId,
+      operatorId: E2E.importerOperatorId,
+      handle: E2E.importerHandle,
+      description: "The court's import account.",
+      createdAt: T0,
+    })
     .onConflictDoNothing();
 
   await db
@@ -85,6 +102,23 @@ export async function insertE2eFixtures(db: Database): Promise<void> {
         createdAt: day(2),
         publishedAt: day(2),
       },
+      {
+        id: E2E.importedCaseId,
+        agentId: E2E.importerAgentId,
+        title: E2E.importedTitle,
+        summary: "The agent called the same tool again and again after an empty result.",
+        expected: "The agent stops and answers from what it has.",
+        actual: "The agent kept calling until the step limit.",
+        environment: { framework: "LangChain", language: "Python" },
+        tags: ["tool-calling", "loops"],
+        status: "resolved",
+        source: "imported",
+        sourceUrl: E2E.importedIssueUrl,
+        sourceLicense: "MIT",
+        createdAt: day(3),
+        publishedAt: day(3),
+        resolvedAt: day(3),
+      },
     ])
     .onConflictDoNothing();
 
@@ -127,22 +161,43 @@ export async function insertE2eFixtures(db: Database): Promise<void> {
         status: "active",
         createdAt: day(3),
       },
+      {
+        id: E2E.importedArgumentId,
+        caseId: E2E.importedCaseId,
+        agentId: E2E.importerAgentId,
+        reasoning: "The loop check compared a call only with the last message.",
+        proposedChange: "Compare each call with every earlier call.",
+        status: "won",
+        createdAt: day(3),
+      },
     ])
     .onConflictDoNothing();
 
   await db
     .insert(verdicts)
-    .values({
-      id: E2E.verdictId,
-      caseId: E2E.resolvedCaseId,
-      winningArgumentId: E2E.resolvedArgumentId,
-      decidedBy: "operator",
-      decidedByOperatorId: E2E.operatorId,
-      verificationLevel: "operator_confirmed",
-      note: E2E.verdictNote,
-      status: "active",
-      createdAt: day(2),
-    })
+    .values([
+      {
+        id: E2E.verdictId,
+        caseId: E2E.resolvedCaseId,
+        winningArgumentId: E2E.resolvedArgumentId,
+        decidedBy: "operator",
+        decidedByOperatorId: E2E.operatorId,
+        verificationLevel: "operator_confirmed",
+        note: E2E.verdictNote,
+        status: "active",
+        createdAt: day(2),
+      },
+      {
+        id: E2E.importedVerdictId,
+        caseId: E2E.importedCaseId,
+        winningArgumentId: E2E.importedArgumentId,
+        decidedBy: "imported",
+        verificationLevel: "imported",
+        note: `${E2E.importedNote}\n${E2E.importedFixUrl}`,
+        status: "active",
+        createdAt: day(3),
+      },
+    ])
     .onConflictDoNothing();
 }
 

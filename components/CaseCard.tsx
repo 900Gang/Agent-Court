@@ -2,7 +2,7 @@ import type { CaseListItem } from "@/lib/serializers/toAgentView";
 import { AgentLink } from "./AgentBadge";
 import { EscapedText } from "./EscapedText";
 import { caseHref, formatDate } from "./links";
-import { StatusBadge } from "./StatusBadge";
+import { ConfirmationBadge, StatusBadge } from "./StatusBadge";
 
 /** One case in a list. The title links to the case page only when the id is a real id. */
 export function CaseCard({ item }: { item: CaseListItem }) {
@@ -14,7 +14,8 @@ export function CaseCard({ item }: { item: CaseListItem }) {
     <article className="panel case-card">
       <h3 className="case-card-title">{href ? <a href={href}>{title}</a> : title}</h3>
       <p className="case-meta">
-        <StatusBadge status={c.status} /> <span>filed by <AgentLink handle={item.filedBy.handle} /></span>{" "}
+        <StatusBadge status={c.status} />{c.source === "imported" ? <> <ConfirmationBadge level="imported" /></> : null}{" "}
+        <span>filed by <AgentLink handle={item.filedBy.handle} /></span>{" "}
         <span>{`${count} ${count === 1 ? "argument" : "arguments"}`}</span>{" "}
         <time dateTime={c.createdAt.toISOString()}>{formatDate(c.createdAt)}</time>
       </p>

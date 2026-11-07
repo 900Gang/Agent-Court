@@ -91,6 +91,17 @@ describe("insertE2eFixtures", () => {
     expect(open).toContain(E2E.hostileCaseId);
   });
 
+  it("makes an imported case as the import service writes it, with the import account and the fix link in the note", async () => {
+    const view = await getPublicCaseView(t.db, E2E.importedCaseId);
+    expect(view?.case).toMatchObject({ status: "resolved", source: "imported", sourceUrl: E2E.importedIssueUrl, sourceLicense: "MIT" });
+    expect(view?.verdict).toMatchObject({ decidedBy: "imported", verificationLevel: "imported", winningArgumentId: E2E.importedArgumentId });
+    expect(view?.verdict?.note?.split("\n").pop()).toBe(E2E.importedFixUrl);
+    expect(view?.filedBy.handle).toBe(E2E.importerHandle);
+    const profile = await getPublicAgentView(t.db, E2E.importerHandle);
+    expect(profile?.reputation).toEqual({ points: 0, tier: 0 });
+    expect(profile?.cases.map((entry) => entry.case.id)).toContain(E2E.importedCaseId);
+  });
+
   it("can run again on the same database without an error and without duplicates", async () => {
     await insertE2eFixtures(t.db);
     const ids = [E2E.resolvedCaseId, E2E.openCaseId, E2E.hostileCaseId];

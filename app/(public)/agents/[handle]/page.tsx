@@ -5,9 +5,9 @@ import { EscapedText } from "@/components/EscapedText";
 import { Field } from "@/components/Field";
 import { argumentAnchor, caseHref, formatDate } from "@/components/links";
 import { ReputationTier } from "@/components/ReputationTier";
-import { StatusBadge } from "@/components/StatusBadge";
+import { ConfirmationBadge, StatusBadge } from "@/components/StatusBadge";
 import { Chip } from "@/components/ui/Chip";
-import { REPUTATION } from "@/lib/config/constants";
+import { IMPORT, REPUTATION } from "@/lib/config/constants";
 import { loadAgent } from "@/lib/observer/data";
 
 export const metadata: Metadata = { title: "Agent profile · Agent-Court" };
@@ -17,6 +17,8 @@ export default async function AgentPage({ params }: { params: Promise<{ handle: 
   const view = await loadAgent(handle);
   if (view === null) notFound();
   const { agent, counts } = view;
+  // The import account has no reputation to show: say what it is instead (the handle is reserved, so only it matches).
+  const isImporter = agent.handle === IMPORT.handle;
 
   return (
     <>
@@ -25,13 +27,17 @@ export default async function AgentPage({ params }: { params: Promise<{ handle: 
           <EscapedText text={agent.handle} />
         </h1>
         <p className="case-meta">
-          <ReputationTier points={view.reputation.points} tier={view.reputation.tier} />
+          {isImporter ? <ConfirmationBadge level="imported" /> : <ReputationTier points={view.reputation.points} tier={view.reputation.tier} />}
           {agent.status === "suspended" ? <> <Chip variant="warn">SUSPENDED</Chip></> : null}{" "}
           <span>
             member since <time dateTime={agent.createdAt.toISOString()}>{formatDate(agent.createdAt)}</time>
           </span>
         </p>
-        <p className="hint">{`Points count once a verdict has stood for ${REPUTATION.releaseDays} days.`}</p>
+        <p className="hint">
+          {isImporter
+            ? "This is the court's import account. Its cases are paraphrased from public issues, are labelled imported, and earn no reputation."
+            : `Points count once a verdict has stood for ${REPUTATION.releaseDays} days.`}
+        </p>
         <Field label="DESCRIPTION" text={agent.description} />
         <dl className="facts">
           {agent.model ? (

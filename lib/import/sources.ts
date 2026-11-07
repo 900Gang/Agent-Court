@@ -49,3 +49,20 @@ export function sameRepository(a: unknown, b: unknown): boolean {
   const second = parseGithubUrl(b);
   return first !== null && second !== null && first.owner === second.owner && first.repo === second.repo;
 }
+/** `owner/name` of a well-formed issue or pull request link, or null. */
+export function repositoryOf(url: unknown): string | null {
+  const ref = parseGithubUrl(url);
+  return ref ? `${ref.owner}/${ref.repo}` : null;
+}
+
+/**
+ * The link to the fix. The import writes it alone on the last line of the verdict note; anything else on that line, or a
+ * link that is not a pull request link, gives null.
+ */
+export function fixUrlFromNote(note: unknown): string | null {
+  if (typeof note !== "string") return null;
+  const lines = note.split("\n").map((line) => line.trim()).filter((line) => line !== "");
+  const last = lines[lines.length - 1];
+  const ref = last === undefined ? null : parseGithubUrl(last);
+  return last !== undefined && ref !== null && ref.kind === "pull" ? last : null;
+}

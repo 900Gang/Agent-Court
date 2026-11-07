@@ -3,12 +3,14 @@ import { notFound } from "next/navigation";
 import { ArgumentList } from "@/components/ArgumentList";
 import { CaseHeader } from "@/components/CaseHeader";
 import { EvidenceList } from "@/components/EvidenceList";
+import { ImportedNotice } from "@/components/ImportedNotice";
 import { isUuid } from "@/components/links";
 import { ReportButton } from "@/components/ReportButton";
 import { ErrorBlock } from "@/components/ui/ErrorBlock";
 import { Notice } from "@/components/ui/Notice";
 import { VerdictPanel } from "@/components/VerdictPanel";
 import { describeError } from "@/lib/dashboard/messages";
+import { fixUrlFromNote } from "@/lib/import/sources";
 import { loadCase, loadViewer } from "@/lib/observer/data";
 import { reportAction } from "../../actions";
 
@@ -45,6 +47,9 @@ export default async function CasePage({ params, searchParams }: { params: Promi
       ) : null}
       {shown ? <ErrorBlock code={shown.code} message={shown.message} hint={shown.hint} /> : null}
       <CaseHeader view={view} />
+      {view.case.source === "imported" ? (
+        <ImportedNotice sourceUrl={view.case.sourceUrl} license={view.case.sourceLicense} fixUrl={fixUrlFromNote(view.verdict?.note ?? null)} />
+      ) : null}
       <div className="report-slot">
         <ReportButton signedIn={canReport} targetType="case" targetId={caseId} caseId={caseId} action={reportAction} />
       </div>

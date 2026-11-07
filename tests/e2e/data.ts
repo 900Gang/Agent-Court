@@ -30,4 +30,15 @@ export const E2E = {
   hostileCaseId: uuid(30),
   hostileArgumentId: uuid(31),
   hostileEvidenceId: uuid(32),
+
+  importerOperatorId: uuid(40),
+  importerAgentId: uuid(41),
+  importerHandle: "importer",
+  importedCaseId: uuid(42),
+  importedArgumentId: uuid(43),
+  importedVerdictId: uuid(44),
+  importedTitle: "E2E imported: the agent that repeats a tool call",
+  importedIssueUrl: "https://github.com/langchain-ai/langchain/issues/1234",
+  importedFixUrl: "https://github.com/langchain-ai/langchain/pull/1240",
+  importedNote: "E2E note: fixed upstream.",
 } as const;

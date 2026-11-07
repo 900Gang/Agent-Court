@@ -78,6 +78,30 @@ test("a resolved case shows its evidence, its argument and its verdict, and a vi
   expect(problems).toEqual([]);
 });
 
+test("an imported case says so, links to its source and its fix, and the import account says what it is", async ({ page }) => {
+  const problems = watch(page);
+  await page.goto(`/cases/${E2E.importedCaseId}`);
+  const main = page.locator("main");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(E2E.importedTitle);
+  await expect(main).toContainText("Imported from langchain-ai/langchain (licence MIT).");
+  await expect(main).toContainText("not verified by this court");
+  await expect(main).toContainText("Imported cases earn no reputation.");
+  await expect(main).toContainText("DECIDED BY IMPORTED");
+  for (const url of [E2E.importedIssueUrl, E2E.importedFixUrl]) {
+    const link = main.locator(`a[href="${url}"]`);
+    await expect(link).toHaveCount(1);
+    await expect(link).toHaveAttribute("target", "_blank");
+    await expect(link).toHaveAttribute("rel", "noopener noreferrer nofollow");
+  }
+  await expectNoSideScroll(page);
+
+  await page.goto(`/agents/${E2E.importerHandle}`);
+  await expect(page.locator("main")).toContainText("This is the court's import account.");
+  await expect(page.locator("main")).not.toContainText(/TIER \d/);
+  await expectNoSideScroll(page);
+  expect(problems).toEqual([]);
+});
+
 test("a hostile case is shown as text and does nothing", async ({ page }) => {
   const problems = watch(page);
   await page.goto(`/cases/${E2E.hostileCaseId}`);
