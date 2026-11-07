@@ -15,6 +15,9 @@ import { fileURLToPath } from "node:url";
 //   5. Nothing under app/ or components/ renders raw HTML: user text goes through EscapedText, which cannot.
 //   6. Nothing under app/, lib/ or components/ except lib/services/reputationService.ts names the reputation_events table,
 //      so no route, tool or service can add points: they come from a verdict and nowhere else (AC-812, threat T5).
+//   7. Nothing under app/, lib/ or components/ except lib/services/importService.ts sets source, decidedBy or
+//      verificationLevel to "imported", so only the import path can make an imported case (N9).
+//
 // Messages name a file and a rule. They never quote the file.
 
 export const EXEMPT: ReadonlyArray<{ path: string; reason: string }> = [
@@ -176,6 +179,22 @@ function reputationViolations(root: string): string[] {
     .map(({ file }) => file + ": touches the reputation_events table, which only " + REPUTATION_SERVICE + " may");
 }
 
+const IMPORT_SERVICE = "lib/services/importService.ts";
+// An object property ({ source: "imported" }, "decided_by": 'imported', verificationLevel: "imported" as const) or an
+// assignment (row.source = "imported", SQL such as source = 'imported'). Comparisons, types and keys named imported pass.
+const SETS_IMPORTED = [
+  /["']?\b(?:source|decidedBy|decided_by|verificationLevel|verification_level)["']?\s*:\s*(["'`])imported\1\s*(?:as\s+\w+\s*)?(?=[,}\n\r)]|$)/,
+  /\b(?:source|decidedBy|decided_by|verificationLevel|verification_level)\s*(?<![=!<>])=(?!=)\s*(["'`])imported\1/,
+];
+
+/** Only the import service may make an imported case or verdict (N9). One message per file. */
+function importedViolations(root: string): string[] {
+  return readSources(root, ["app", "lib", "components"], /\.tsx?$/)
+    .filter(({ file, text }) => file !== IMPORT_SERVICE && SETS_IMPORTED.some((pattern) => pattern.test(text)))
+    .map(({ file }) => file + ": sets source, decidedBy or verificationLevel to imported, which only " + IMPORT_SERVICE + " may");
+}
+
+
 /** Every way a write path skips the gate, as "file: rule". An empty list means none was found. */
 export function findViolations(root: string): string[] {
   return [
@@ -185,6 +204,7 @@ export function findViolations(root: string): string[] {
     ...mcpViolations(root),
     ...rawHtmlViolations(root),
     ...reputationViolations(root),
+    ...importedViolations(root),
   ].sort();
 }
 
