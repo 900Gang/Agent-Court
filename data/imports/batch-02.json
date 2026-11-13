@@ -1,0 +1,902 @@
+[
+  {
+    "repository": "deepset-ai/haystack",
+    "issueUrl": "https://github.com/deepset-ai/haystack/issues/13730",
+    "fixUrl": "https://github.com/deepset-ai/haystack/pull/13731",
+    "title": "Block assignments in prompt templates are mistaken for inputs the pipeline must supply",
+    "summary": "In a Jinja template, a variable defined with the block form of set, closed by endset, inside a condition or loop is inferred to be an input variable. With the default of requiring all inferred variables, the prompt builders then fail at run time with a missing input error, and the output adapter and the conditional router acquire a mandatory input that nothing in a pipeline connects. The same template written with the one-line form of set works.",
+    "expected": "Variables defined inside the template are never treated as inputs.",
+    "actual": "A ValueError reports missing required input variables for a name the template itself defines.",
+    "tags": [
+      "parsing",
+      "validation"
+    ],
+    "framework": "Haystack",
+    "language": "Python",
+    "fixReasoning": "The helper that collects variables assigned in a template looked only for simple assignment nodes. A block assignment is a different node type in the Jinja syntax tree, so its target was left out of the assigned set and fell through to the list of inputs.",
+    "fixChange": "Make the helper also collect the targets of block assignment nodes, so that variables defined with the block form of set are treated as template-assigned, which fixes the two prompt builders and the components that share the helper.",
+    "note": "Fixed upstream: deepset-ai/haystack change #13731"
+  },
+  {
+    "repository": "deepset-ai/haystack",
+    "issueUrl": "https://github.com/deepset-ai/haystack/issues/13032",
+    "fixUrl": "https://github.com/deepset-ai/haystack/pull/13283",
+    "title": "The JSON schema validator checks array elements one by one against an array schema",
+    "summary": "The validator breaks every top-level JSON array into its elements and checks each one on its own against the schema. When the schema describes an array, a valid array of two integers is therefore rejected, because a lone integer is not an array, and an empty array passes a minimum item count since nothing is checked. A valid model reply can end up in a recovery loop, or an invalid one can reach the next component.",
+    "expected": "An array schema is applied to the whole array, including its item rules and its size and uniqueness limits.",
+    "actual": "Valid arrays are rejected and empty arrays skip the constraints.",
+    "tags": [
+      "validation",
+      "schema"
+    ],
+    "framework": "Haystack",
+    "language": "Python",
+    "fixReasoning": "The validator treated every list as a batch of separate payloads, which suits lists of function calls but not a schema that is itself about an array. Dispatching on the schema type fixes this: an explicit array schema is applied to the whole payload, and every other schema keeps validating elements one at a time.",
+    "fixChange": "Apply a top-level array schema, or a type list that includes array, to the complete payload so that item, size and uniqueness rules are enforced even on empty arrays, keep per-element validation for other schemas and for function-call schemas, and add an upgrade note showing how to keep validating inner arrays.",
+    "note": "Fixed upstream: deepset-ai/haystack change #13283"
+  },
+  {
+    "repository": "deepset-ai/haystack",
+    "issueUrl": "https://github.com/deepset-ai/haystack/issues/13502",
+    "fixUrl": "https://github.com/deepset-ai/haystack/pull/13503",
+    "title": "The semantic answer similarity evaluator accepts a bad batch size and may return a NaN score",
+    "summary": "The evaluator takes any batch size, including zero or negative values, and the problem appears only when it runs. On some versions of the embedding library a batch size of zero gives an unhelpful range error, and a negative one with a cross-encoder model silently returns a NaN score with an empty list of individual scores, which is easy to overlook.",
+    "expected": "An invalid batch size is rejected when the evaluator is created, with a clear message.",
+    "actual": "A confusing late error, or a silent NaN result.",
+    "tags": [
+      "validation",
+      "configuration"
+    ],
+    "framework": "Haystack",
+    "language": "Python",
+    "fixReasoning": "Nothing checked the value at construction, so behaviour depended on how the underlying library reacted, which varies by version. Validating once in the constructor gives the same clear failure everywhere, including when a serialized configuration is loaded.",
+    "fixChange": "Raise a ValueError in the evaluator's constructor unless the batch size is a positive integer, using the same check and message as the OpenAI embedders, and update the docstring and tests with bad values and loading from a dictionary.",
+    "note": "Fixed upstream: deepset-ai/haystack change #13503"
+  },
+  {
+    "repository": "deepset-ai/haystack",
+    "issueUrl": "https://github.com/deepset-ai/haystack/issues/13436",
+    "fixUrl": "https://github.com/deepset-ai/haystack/pull/13437",
+    "title": "Pieces of a large Python function all claim the line range of the whole function",
+    "summary": "When the Python code splitter falls back to a line-based split for a function or method that is too large, every resulting piece receives the start and end lines of the entire function. A function spanning forty lines that is cut into nine pieces gives nine documents with identical ranges, so a retrieved piece cannot be traced back to the code it contains for citations or editor links.",
+    "expected": "Each piece reports the lines it really covers.",
+    "actual": "Every piece reports the whole function's start and end lines.",
+    "tags": [
+      "parsing",
+      "state"
+    ],
+    "framework": "Haystack",
+    "language": "Python",
+    "fixReasoning": "Each piece was created as a copy of the unit's metadata, which includes the unit's full line range, and nothing recalculated it. The general document splitter already records where each piece starts, and the unit's end line is known, so the first physical line can be derived even when blank lines or comments precede the definition.",
+    "fixChange": "Map each secondary split piece back to the file lines it covers by using the start offset the document splitter records together with the unit's end line and line count, and report those ranges in each piece's metadata.",
+    "note": "Fixed upstream: deepset-ai/haystack change #13437"
+  },
+  {
+    "repository": "deepset-ai/haystack",
+    "issueUrl": "https://github.com/deepset-ai/haystack/issues/13292",
+    "fixUrl": "https://github.com/deepset-ai/haystack/pull/13293",
+    "title": "Combining all removal patterns into one regular expression breaks patterns that work alone",
+    "summary": "The text cleaner joins every pattern from its removal list into one alternation. Patterns that are valid individually then break in three ways: a backreference in a later pattern points at a group of an earlier one and stops matching, two patterns that use the same group name raise a compile error, and a global inline flag is rejected unless it is in the first pattern.",
+    "expected": "Each pattern behaves exactly as it would on its own.",
+    "actual": "Matching silently changes, or compilation fails, depending on the other patterns in the list.",
+    "tags": [
+      "parsing",
+      "configuration"
+    ],
+    "framework": "Haystack",
+    "language": "Python",
+    "fixReasoning": "Regular expression syntax such as group numbering, group names and global flags is defined per whole expression, so concatenating separate expressions with a vertical bar changes their meaning. Compiling each pattern separately and applying them in list order keeps each one's own semantics, and a single pattern still matches what it matched before.",
+    "fixChange": "Compile every pattern in the removal list on its own and apply them one after another in list order instead of joining them into one expression, leaving the case-insensitivity default unchanged.",
+    "note": "Fixed upstream: deepset-ai/haystack change #13293"
+  },
+  {
+    "repository": "deepset-ai/haystack",
+    "issueUrl": "https://github.com/deepset-ai/haystack/issues/13631",
+    "fixUrl": "https://github.com/deepset-ai/haystack/pull/13633",
+    "title": "Tool search cannot find a tool by a word that appears inside its snake case name",
+    "summary": "The searchable toolset builds its keyword index from the tool's name followed by its description, and the default tokenizer treats the underscore as part of a word, so a name such as get_weather stays one token. Searching for weather finds nothing unless the description repeats the word, although the instructions given to the model encourage searching by words from tool names.",
+    "expected": "A word from a snake case name finds the tool.",
+    "actual": "The search answers that no tools match.",
+    "tags": [
+      "tool-calling",
+      "parsing"
+    ],
+    "framework": "Haystack",
+    "language": "Python",
+    "fixReasoning": "The index text contained only the raw name, and under the tokenizer's rules an underscore joins words into a single token, so the individual words were unreachable. Adding a second form of the name with the underscores split into spaces makes each word searchable while exact names and description matches keep working.",
+    "fixChange": "Index the tool name a second time with underscores split into separate words, in addition to the original name and the description, so that a keyword taken from a snake case name finds the tool.",
+    "note": "Fixed upstream: deepset-ai/haystack change #13633"
+  },
+  {
+    "repository": "deepset-ai/haystack",
+    "issueUrl": "https://github.com/deepset-ai/haystack/issues/13484",
+    "fixUrl": "https://github.com/deepset-ai/haystack/pull/13649",
+    "title": "The regex extractor returns None when the pattern matches but its first group does not take part",
+    "summary": "When a pattern matches but its first capture group is not part of the match, as with an alternation where the other branch wins or with an unmatched optional group, the extractor returns None for the captured text. The component declares a string output, so the next component receives None where a string was promised.",
+    "expected": "A string is returned, and an empty one is the natural choice since that is what a failed match already gives.",
+    "actual": "None is passed downstream in place of a string.",
+    "tags": [
+      "type-errors",
+      "parsing"
+    ],
+    "framework": "Haystack",
+    "language": "Python",
+    "fixReasoning": "The code returned the first group directly, and Python reports a group that did not participate as None. Because the declared output type is str and the no-match case already yields an empty string, mapping the missing group to an empty string keeps the contract consistent.",
+    "fixChange": "Return an empty string when the first capture group did not take part in the match, covering alternations and optional groups, and test both patterns from the report.",
+    "note": "Fixed upstream: deepset-ai/haystack change #13649"
+  },
+  {
+    "repository": "deepset-ai/haystack",
+    "issueUrl": "https://github.com/deepset-ai/haystack/issues/13208",
+    "fixUrl": "https://github.com/deepset-ai/haystack/pull/13637",
+    "title": "Merging initial and runtime filters behaves differently depending on how both are wrapped",
+    "summary": "Under the merge filter policy, when the initial and the runtime filters both constrain the same field, the outcome depends on the wrapping. If either side is a bare comparison, the runtime condition overwrites the initial one and a warning is logged, as documented. If both sides are logical AND filters, their conditions are concatenated, so contradictory conditions on one field return nothing and nothing is logged.",
+    "expected": "The user is told when merging produces an intersection on a field that both filters constrain.",
+    "actual": "The result is silently empty.",
+    "tags": [
+      "validation",
+      "configuration"
+    ],
+    "framework": "Haystack",
+    "language": "Python",
+    "fixReasoning": "The maintainers agreed to keep intersecting two AND filters, which is a deliberate and useful behaviour, but the lack of any signal made a conflicting pair indistinguishable from an empty store. A warning that names the shared fields makes the situation visible without changing the returned filter.",
+    "fixChange": "Log a warning that names the shared fields when two AND filters under the merge policy both have conditions on the same field, leave the returned filter unchanged, and update the comments and docstrings to describe what actually happens.",
+    "note": "Fixed upstream: deepset-ai/haystack change #13637"
+  },
+  {
+    "repository": "deepset-ai/haystack",
+    "issueUrl": "https://github.com/deepset-ai/haystack/issues/13554",
+    "fixUrl": "https://github.com/deepset-ai/haystack/pull/13615",
+    "title": "The answer builder does not validate its reference pattern and crashes with an obscure int error",
+    "summary": "The answer builder checks that its main pattern has at most one capture group but never checks the reference pattern. The code converts whatever the pattern finds to an integer, so a pattern with no groups, with two groups, or with an optional group that did not take part fails with an unclear conversion error, and only when a reply actually contains a match, which lets it pass testing and fail on real model output.",
+    "expected": "An invalid reference pattern is reported with a clear message, as the main pattern is.",
+    "actual": "A ValueError or TypeError from int, raised late.",
+    "tags": [
+      "validation",
+      "parsing"
+    ],
+    "framework": "Haystack",
+    "language": "Python",
+    "fixReasoning": "The number of groups decides what findall returns, strings with one group but tuples with several and whole matches with none, and the code assumed the single-group shape. Validating the pattern up front, and raising a clear error for a match that is not an index, turns a late cryptic failure into an early one.",
+    "fixChange": "Validate the reference pattern in the same way as the main pattern and raise a clear error naming the problem when a match cannot be read as an index, so that patterns without groups, with several groups or with unmatched optional groups fail clearly.",
+    "note": "Fixed upstream: deepset-ai/haystack change #13615"
+  },
+  {
+    "repository": "deepset-ai/haystack",
+    "issueUrl": "https://github.com/deepset-ai/haystack/issues/13613",
+    "fixUrl": "https://github.com/deepset-ai/haystack/pull/13617",
+    "title": "Structured output parsing fails when the code fence around the JSON uses Windows line endings",
+    "summary": "The hook that parses an agent's final reply as structured data first removes an outer Markdown code fence. The pattern handles fences with Unix line endings only, so an equivalent fence with carriage return and line feed stays in the text, parsing fails, the configured correction retries are used up, and None is stored instead of the valid result.",
+    "expected": "Fences with either kind of line ending are removed and the JSON parses.",
+    "actual": "The error says the reply is not valid JSON, after all retries.",
+    "tags": [
+      "parsing",
+      "structured-output"
+    ],
+    "framework": "Haystack",
+    "language": "Python",
+    "fixReasoning": "The fence pattern spelled the boundary as a single newline character, which never matches a carriage return followed by a newline. Accepting both forms at the fence boundaries fixes it without rewriting line endings inside the payload.",
+    "fixChange": "Make the fence stripping accept both LF and CRLF at the fence boundaries while leaving the payload's own line endings untouched, and keep the existing behaviour for unfenced replies and for replies that contain text outside the fence.",
+    "note": "Fixed upstream: deepset-ai/haystack change #13617"
+  },
+  {
+    "repository": "pydantic/pydantic-ai",
+    "issueUrl": "https://github.com/pydantic/pydantic-ai/issues/12886",
+    "fixUrl": "https://github.com/pydantic/pydantic-ai/pull/13357",
+    "title": "A graph run reports the start node as next after a map over an empty list",
+    "summary": "After a map step that iterates over an empty list, the property that tells what task comes next returns the start node in the middle of the run, instead of an empty list. With a non-empty list it correctly names the following node. The code tested the stored list for truthiness, so an empty list was read as meaning that the run had not started yet.",
+    "expected": "An empty list of next tasks is reported as empty.",
+    "actual": "The start node appears as the next task mid-run.",
+    "tags": [
+      "state",
+      "loops"
+    ],
+    "framework": "Pydantic AI graphs",
+    "language": "Python",
+    "fixReasoning": "An empty list and a missing value mean different things here: empty means that nothing is left to run, and none means that the run has not begun. Using a falsy test merged the two cases. Checking for none, as the iteration methods already do, separates them, and it also corrects the empty step yielded at the end of a map over an async iterable and an override with an empty list.",
+    "fixChange": "Return the first task only when the stored next list is None, and otherwise return it as it is, even if it is empty, which matches the test the run's iteration methods already use.",
+    "note": "Fixed upstream: pydantic/pydantic-ai change #13357"
+  },
+  {
+    "repository": "pydantic/pydantic-ai",
+    "issueUrl": "https://github.com/pydantic/pydantic-ai/issues/12334",
+    "fixUrl": "https://github.com/pydantic/pydantic-ai/pull/13323",
+    "title": "An output function with one aliased parameter fails with a bare KeyError",
+    "summary": "If an output function takes a single argument and that argument has a Pydantic alias, the run raises a KeyError although the model sent exactly what the schema asked for. The wrapper key was read from the JSON schema, where the property carries the alias, while the validated arguments are stored under the Python parameter name.",
+    "expected": "The aliased argument is passed to the function in every output mode.",
+    "actual": "A KeyError, in tool output, prompted output and native output alike.",
+    "tags": [
+      "structured-output",
+      "schema"
+    ],
+    "framework": "Pydantic AI",
+    "language": "Python",
+    "fixReasoning": "Two different naming schemes were mixed: the schema describes arguments by alias, while the validated data uses parameter names, and the code looked one up in the other. The text output path read the same key and even called the function with the alias, and the single-field count came from the schema too. Taking the name and the count from the function's own signature removes the mismatch.",
+    "fixChange": "Derive the single field name and the field count from the function's parameters rather than from the JSON schema, use the Python name when reading validated arguments and when calling the function in text output, and let keyword-arguments and schema-skipped values pass through.",
+    "note": "Fixed upstream: pydantic/pydantic-ai change #13323"
+  },
+  {
+    "repository": "pydantic/pydantic-ai",
+    "issueUrl": "https://github.com/pydantic/pydantic-ai/issues/12853",
+    "fixUrl": "https://github.com/pydantic/pydantic-ai/pull/13325",
+    "title": "A nested fallback model loses the usage of a rejected response when the outer fallback handles the error",
+    "summary": "When an inner fallback model has one response rejected and then a later candidate raises an error that only the outer fallback handles, the usage of the rejected response is dropped. The run then reports too few tokens and too little cost, and configured limits may not trigger: in the reported example the correct totals were 165 input tokens, but the run reported 45.",
+    "expected": "Every billed attempt counts toward totals and limits, however deeply nested.",
+    "actual": "Usage from the rejected inner response disappears.",
+    "tags": [
+      "cost",
+      "error-handling"
+    ],
+    "framework": "Pydantic AI",
+    "language": "Python",
+    "fixReasoning": "An inner fallback that cannot handle an error attaches the attempts it has made to that error, but the log that collects attempts read nested attempts only from a response or from a group of fallback exceptions. When the outer fallback moved on from the attached error, those attempts were never recorded.",
+    "fixChange": "Make the attempt log also record the attempts carried on an error that an outer fallback handles, so that rejected responses of nested fallback chains count toward usage, cost and limits.",
+    "note": "Fixed upstream: pydantic/pydantic-ai change #13325"
+  },
+  {
+    "repository": "pydantic/pydantic-ai",
+    "issueUrl": "https://github.com/pydantic/pydantic-ai/issues/13066",
+    "fixUrl": "https://github.com/pydantic/pydantic-ai/pull/13271",
+    "title": "Structured tool results that sit next to a file reach the model as doubly encoded JSON",
+    "summary": "A tool can return a list that combines a structured value, for example a dictionary, with a file. The code renders each item that is not a string to JSON text and then encodes the whole list of strings as JSON once more. On providers whose tool result channel accepts only text, with files sent in a trailing user message, the structured item arrives as a string with every quote escaped instead of as an object.",
+    "expected": "The structured item is sent in the same form as when no file is present.",
+    "actual": "An escaped JSON string appears in the tool result.",
+    "tags": [
+      "serialization",
+      "tool-calling"
+    ],
+    "framework": "Pydantic AI",
+    "language": "Python",
+    "fixReasoning": "The method serialized the items once to make strings and then serialized the resulting list again, so every structured item was encoded twice. Keeping each item in its JSON form and serializing once yields the same shape that a lone structured result has.",
+    "fixChange": "Keep structured items in JSON form when building the tool result text for text-only channels, serializing each item as it would be when it is the tool's only result, for the chat, Mistral, Groq, Hugging Face and xAI models and the realtime sessions.",
+    "note": "Fixed upstream: pydantic/pydantic-ai change #13271"
+  },
+  {
+    "repository": "pydantic/pydantic-ai",
+    "issueUrl": "https://github.com/pydantic/pydantic-ai/issues/13259",
+    "fixUrl": "https://github.com/pydantic/pydantic-ai/pull/13304",
+    "title": "A web search call without an action makes the whole OpenAI Responses request fail",
+    "summary": "OpenAI can return a completed web search call item with no action field, although the SDK types the field as required. The code that counts billed searches reads the action's type, so it raises an AttributeError and fails both the normal and the streaming run even though a complete answer was already received. A second problem hid the reported search count on newer SDK versions.",
+    "expected": "A missing action is tolerated and the run succeeds.",
+    "actual": "An attribute error aborts the request.",
+    "tags": [
+      "model-provider",
+      "type-errors"
+    ],
+    "framework": "Pydantic AI with OpenAI",
+    "language": "Python",
+    "fixReasoning": "The published API spec had dropped the field from the required list, and responses are built without validation, so the field really can be None. The counter has to check for its presence. Newer SDK versions also type the usage field, so it no longer lands in the extra data where the code looked for it.",
+    "fixChange": "Check that the action exists before reading its type when counting billed web searches, and read the reported search count from the typed usage field on newer OpenAI SDK versions as well as from the extra data.",
+    "note": "Fixed upstream: pydantic/pydantic-ai change #13304"
+  },
+  {
+    "repository": "pydantic/pydantic-ai",
+    "issueUrl": "https://github.com/pydantic/pydantic-ai/issues/12395",
+    "fixUrl": "https://github.com/pydantic/pydantic-ai/pull/12488",
+    "title": "The MCP sampling model runs separate system prompt blocks together with no separator",
+    "summary": "When the sampling request's system prompt is built, the blocks are joined with an empty string, so the end of one block runs straight into the start of the next. Other adapters that merge system blocks use a blank line. Mid-conversation system prompts were also sent to the client as tagged text in the user turn without the announcement that explains the tag, which the other adapters include.",
+    "expected": "Blocks are separated by a blank line, and the framing announcement is present when tagged system text is sent.",
+    "actual": "Blocks are glued together and the tag is unexplained.",
+    "tags": [
+      "prompting",
+      "protocol"
+    ],
+    "framework": "Pydantic AI with MCP",
+    "language": "Python",
+    "fixReasoning": "The join used an empty separator, and the model had opted out of the shared framing step precisely because it did not separate blocks properly. Joining with a blank line removes the reason for the opt-out, so the model can inherit the common preparation that adds the announcement under the same rule as the other adapters.",
+    "fixChange": "Join the system prompt blocks with a blank line in the message mapping and remove the opt-out so that the sampling model inherits the shared preparation step, which adds the announcement whenever a tagged system block is sent.",
+    "note": "Fixed upstream: pydantic/pydantic-ai change #12488"
+  },
+  {
+    "repository": "pydantic/pydantic-ai",
+    "issueUrl": "https://github.com/pydantic/pydantic-ai/issues/10525",
+    "fixUrl": "https://github.com/pydantic/pydantic-ai/pull/13268",
+    "title": "Non-object tool arguments are accepted when Python runs with optimizations",
+    "summary": "The method that returns a tool call's arguments as a dictionary checks that the parsed JSON is an object using an assert statement. Running Python with the optimization flag removes asserts, so JSON such as an empty list is returned as a list, breaking the dictionary contract, and later code that expects a dictionary raises an attribute error.",
+    "expected": "Both optimized and ordinary interpreters reject JSON that is not an object, giving the invalid arguments dictionary by default.",
+    "actual": "The raw value is returned and invalid arguments are no longer detected.",
+    "tags": [
+      "validation",
+      "type-errors"
+    ],
+    "framework": "Pydantic AI",
+    "language": "Python",
+    "fixReasoning": "An assert is a debugging aid that the interpreter may strip, so it cannot carry a check that the program's behaviour depends on. An explicit conditional that raises the same documented exception works in every mode, and callers already catch it.",
+    "fixChange": "Replace the assert with an explicit check that raises the same AssertionError for JSON that is not an object, so that the default result is an invalid-arguments dictionary and raising on invalid input works under the optimization flag as well.",
+    "note": "Fixed upstream: pydantic/pydantic-ai change #13268"
+  },
+  {
+    "repository": "pydantic/pydantic-ai",
+    "issueUrl": "https://github.com/pydantic/pydantic-ai/issues/12822",
+    "fixUrl": "https://github.com/pydantic/pydantic-ai/pull/13272",
+    "title": "Saving a serialized conversation that used an output tool stores a new branch every turn",
+    "summary": "With an output tool, and a conversation that lost its in-memory stored mark through any JSON round trip, such as a queue, a cache or a workflow activity, saving no longer appends the new turn from the third turn on. Everything after the first message is saved again as a fresh branch, so by turn five the first prompt exists eight times across three branches, although the documentation promises that a stored conversation only grows.",
+    "expected": "Each turn is appended to the existing branch.",
+    "actual": "Each turn creates another branch and duplicates earlier messages.",
+    "tags": [
+      "state",
+      "memory"
+    ],
+    "framework": "Pydantic AI",
+    "language": "Python",
+    "fixReasoning": "A run cleans the history before it sets the index of new messages, and a stored output tool result gets merged into the next prompt to form one request. After the stored mark is lost, the save looked at the raw stored tail, which no longer lined up with those merged messages, and concluded that the history had diverged. The comparison has to allow for that cleaning step.",
+    "fixChange": "Make the comparison in the conversation store save account for the merging of a stored output tool result with the next prompt, so that a serialized conversation is recognised as a continuation and only the new turn is appended, including when the history was loaded with a limit.",
+    "note": "Fixed upstream: pydantic/pydantic-ai change #13272"
+  },
+  {
+    "repository": "pydantic/pydantic-ai",
+    "issueUrl": "https://github.com/pydantic/pydantic-ai/issues/12399",
+    "fixUrl": "https://github.com/pydantic/pydantic-ai/pull/12406",
+    "title": "Output cut off at the token limit is handled differently depending on the output type",
+    "summary": "When a response ends because of the token limit, the outcome varies with the output type: plain text is returned as if complete, structured output with cut-off JSON re-prompts the model with the same limit until the retries run out, and streaming raises a validation error that never mentions the limit. None of these paths names the real cause, and a fallback model cannot fall back on it.",
+    "expected": "A truncated structured response fails right away with an error that names the token limit.",
+    "actual": "The model is re-prompted with the same limit and the final error hides the cause.",
+    "tags": [
+      "retries",
+      "structured-output"
+    ],
+    "framework": "Pydantic AI",
+    "language": "Python",
+    "fixReasoning": "Retrying with an identical token budget cannot produce a complete answer, so the retries only burn requests. When native or prompted output text fails validation after a length cut-off, raising immediately with a message about the limit gives the user and the fallback logic something to act on. An earlier change had already stopped re-prompting for the case with no output at all.",
+    "fixChange": "Raise immediately, instead of retrying, when the token limit cuts off native or prompted output text that fails validation, with an error that names the limit. The streaming path carries a private marker for this case. This is the first part of a larger change tracked in the same issue.",
+    "note": "Fixed upstream (first part of the issue): pydantic/pydantic-ai change #12406"
+  },
+  {
+    "repository": "microsoft/semantic-kernel",
+    "issueUrl": "https://github.com/microsoft/semantic-kernel/issues/14539",
+    "fixUrl": "https://github.com/microsoft/semantic-kernel/pull/14541",
+    "title": "Oracle vector search crashes when given several filters",
+    "summary": "The Oracle collection's vector search handled only a single filter. When the options carry a list of two or more filters, which the documentation says are combined with AND, the shared helper returns a list of query-and-parameter pairs, and the code fails with an attribute error. Each filter was also parsed with its own bind counter, so bind names would have collided.",
+    "expected": "Several filters are combined with AND into one query.",
+    "actual": "An AttributeError about a tuple having no values attribute.",
+    "tags": [
+      "vector-store",
+      "type-errors"
+    ],
+    "framework": "Semantic Kernel",
+    "language": "Python",
+    "fixReasoning": "The helper returns one pair for one filter and a list of pairs for several, and the search code assumed the first shape. Overriding the filter building step in the Oracle collection lets all filters share one bind counter and be joined with AND into the single pair that the rest of the code expects.",
+    "fixChange": "Override the filter building method in the Oracle collection so that all filters share one bind counter and are combined with AND into a single query-and-parameters pair, as the search options document.",
+    "note": "Fixed upstream: microsoft/semantic-kernel change #14541"
+  },
+  {
+    "repository": "microsoft/semantic-kernel",
+    "issueUrl": "https://github.com/microsoft/semantic-kernel/issues/14684",
+    "fixUrl": "https://github.com/microsoft/semantic-kernel/pull/14688",
+    "title": "Hybrid search on Azure AI Search uses declared field names instead of their storage names",
+    "summary": "When a model field declares a storage name, the index is created with that name and vector search queries it correctly, but hybrid search sends the declared property names. Azure AI Search then rejects the request with an unknown field error, because the index does not contain those names.",
+    "expected": "Hybrid requests reference the fields the index really has.",
+    "actual": "A 400 error for unknown fields.",
+    "tags": [
+      "vector-store",
+      "schema"
+    ],
+    "framework": "Semantic Kernel with Azure AI Search",
+    "language": "Python",
+    "fixReasoning": "The vector branch already resolved each field as its storage name or, failing that, its declared name, but the hybrid branch read the declared name directly, so the two query paths disagreed about the index schema.",
+    "fixChange": "In the hybrid search branch use the storage name, falling back to the declared name, for the search fields and for the vector fields of the query.",
+    "note": "Fixed upstream: microsoft/semantic-kernel change #14688"
+  },
+  {
+    "repository": "microsoft/semantic-kernel",
+    "issueUrl": "https://github.com/microsoft/semantic-kernel/issues/14535",
+    "fixUrl": "https://github.com/microsoft/semantic-kernel/pull/14537",
+    "title": "The Handlebars messages helper ignores the history it is given",
+    "summary": "In a Handlebars template the messages helper always reads the variable named chat_history from the context, whichever argument it is given. Without that variable it raises a KeyError, and when it exists with other content, the wrong history is rendered. The Jinja2 equivalent uses its argument, so the two template formats behave differently.",
+    "expected": "The helper renders the history passed to it.",
+    "actual": "It reads the fixed context variable and ignores its argument.",
+    "tags": [
+      "prompting",
+      "state"
+    ],
+    "framework": "Semantic Kernel",
+    "language": "Python",
+    "fixReasoning": "The helper function never looked at its positional arguments and read a hard-coded key from the context. Using the first argument when there is one, and falling back to the context variable only when none is given, fixes the new use and keeps existing templates that pass the default variable behaving as before.",
+    "fixChange": "Make the helper use its first positional argument, with a fallback to the chat history variable of the context when no argument is supplied, so that existing templates keep working.",
+    "note": "Fixed upstream: microsoft/semantic-kernel change #14537"
+  },
+  {
+    "repository": "microsoft/semantic-kernel",
+    "issueUrl": "https://github.com/microsoft/semantic-kernel/issues/14683",
+    "fixUrl": "https://github.com/microsoft/semantic-kernel/pull/14687",
+    "title": "SQL Server filters turn a None comparison into the text None instead of a null test",
+    "summary": "The SQL Server collection renders a comparison with None as an equality test against the string None, so a filter on a field that may be null can never match a database null. The identity form of the comparison, written with is None, was not supported at all, and booleans were bound as the strings True and False rather than as numbers.",
+    "expected": "Comparisons with None become null tests, and booleans bind as bit values.",
+    "actual": "The filter compares against the literal text and matches nothing.",
+    "tags": [
+      "vector-store",
+      "parsing"
+    ],
+    "framework": "Semantic Kernel with SQL Server",
+    "language": "Python",
+    "fixReasoning": "Under standard null handling, comparing a column with null using equality is unknown rather than true, so such a comparison has to be written as a null test. The parser needs to recognise None constants and the identity operators and emit the proper SQL forms, and to bind booleans as the values that the database stores.",
+    "fixChange": "Teach the lambda parser of the SQL Server collection to translate comparisons with None and the identity operators into null tests and to bind booleans as one and zero instead of strings.",
+    "note": "Fixed upstream: microsoft/semantic-kernel change #14687"
+  },
+  {
+    "repository": "microsoft/semantic-kernel",
+    "issueUrl": "https://github.com/microsoft/semantic-kernel/issues/14521",
+    "fixUrl": "https://github.com/microsoft/semantic-kernel/pull/14580",
+    "title": "The volatile memory store returns an unawaited coroutine instead of the nearest match",
+    "summary": "The method that should return the single nearest memory record and its score is declared async, but it returns the result of calling another async method without awaiting it. Callers who await it get a coroutine, Python warns that a coroutine was never awaited, and even when awaited the result would be a list of tuples rather than the single tuple the signature promises.",
+    "expected": "The top record and its score are returned as one tuple.",
+    "actual": "A coroutine object comes back.",
+    "tags": [
+      "async",
+      "type-errors"
+    ],
+    "framework": "Semantic Kernel",
+    "language": "Python",
+    "fixReasoning": "An async function that returns another coroutine hands the work to its caller instead of doing it. The method has to await the multi-match call and then pick the first element, in order to meet the contract of the base class.",
+    "fixChange": "Await the multi-match method in the nearest match method and return the top record with its score as the declared tuple.",
+    "note": "Fixed upstream: microsoft/semantic-kernel change #14580"
+  },
+  {
+    "repository": "microsoft/semantic-kernel",
+    "issueUrl": "https://github.com/microsoft/semantic-kernel/issues/14538",
+    "fixUrl": "https://github.com/microsoft/semantic-kernel/pull/14540",
+    "title": "The in-memory collection combines several filters with OR although they should be combined with AND",
+    "summary": "The search options document that several filters are combined with AND, and every other vector store connector does so. The in-memory collection kept a record as soon as any one filter matched, which is OR, so searches with more than one filter returned too many records.",
+    "expected": "A record must satisfy every filter.",
+    "actual": "A record that matches any one filter is returned.",
+    "tags": [
+      "vector-store",
+      "validation"
+    ],
+    "framework": "Semantic Kernel",
+    "language": "Python",
+    "fixReasoning": "The loop added a record to the result when a filter matched and never required the rest to match. Keeping the record only when all filters match gives the documented meaning, and a single filter behaves exactly as before.",
+    "fixChange": "Keep a record in the in-memory collection only when every one of the filters matches, and add tests for both string filters and callable filters.",
+    "note": "Fixed upstream: microsoft/semantic-kernel change #14540"
+  },
+  {
+    "repository": "microsoft/semantic-kernel",
+    "issueUrl": "https://github.com/microsoft/semantic-kernel/issues/14571",
+    "fixUrl": "https://github.com/microsoft/semantic-kernel/pull/14572",
+    "title": "Filters with a negative number literal are rejected by most vector store connectors",
+    "summary": "A filter lambda that compares against a negative number, such as a temperature above minus five, raises a not implemented error in nine of the eleven vector store connectors. Python parses a negative literal as a unary minus applied to a positive constant, and each connector's parser rejects every unary operator other than not.",
+    "expected": "Negative bounds work in filters, since scores, offsets and temperatures are normally negative at times.",
+    "actual": "A NotImplementedError from the connector's lambda parser.",
+    "tags": [
+      "vector-store",
+      "parsing"
+    ],
+    "framework": "Semantic Kernel",
+    "language": "Python",
+    "fixReasoning": "Repeating the same special case in nine parsers would be error-prone, so the right place is the shared step that builds the filter before any connector parser sees it. There a unary plus or minus on a numeric constant can be folded into a plain constant, while other unary expressions stay unchanged and stay unsupported.",
+    "fixChange": "Fold unary plus and minus applied to integer or float constants into plain constants in the shared filter building path, before the connector parsers run, and leave other unary expressions as they were.",
+    "note": "Fixed upstream: microsoft/semantic-kernel change #14572"
+  },
+  {
+    "repository": "microsoft/semantic-kernel",
+    "issueUrl": "https://github.com/microsoft/semantic-kernel/issues/14581",
+    "fixUrl": "https://github.com/microsoft/semantic-kernel/pull/14588",
+    "title": "Loading an OpenAPI plugin fails when a path has shared parameters, a summary or a description",
+    "summary": "The OpenAPI parser takes every key of a path item to be an HTTP method. A path item may also hold a summary, a description, servers and parameters shared by all its operations. If one of these is present, the plugin cannot be loaded and the parser complains that the operation id is missing, and the shared parameters never reach the operations.",
+    "expected": "Only HTTP method keys are operations, and shared parameters are merged into each of them.",
+    "actual": "The load fails with an operation id missing error.",
+    "tags": [
+      "schema",
+      "parsing"
+    ],
+    "framework": "Semantic Kernel",
+    "language": "Python",
+    "fixReasoning": "The loop did not distinguish between method entries and the other keys that the OpenAPI specification allows at that level. Restricting it to real methods fixes the load, and merging path-level parameters into each operation implements their meaning, with an operation-level parameter of the same name and location taking precedence.",
+    "fixChange": "Treat only HTTP method keys of a path item as operations, merge the path-level parameters into every operation, and let an operation's own parameter with the same name and location override the shared one, with tests for both.",
+    "note": "Fixed upstream: microsoft/semantic-kernel change #14588"
+  },
+  {
+    "repository": "microsoft/semantic-kernel",
+    "issueUrl": "https://github.com/microsoft/semantic-kernel/issues/14559",
+    "fixUrl": "https://github.com/microsoft/semantic-kernel/pull/14560",
+    "title": "Chroma and Weaviate filters double apostrophes, so names such as O'Brien never match",
+    "summary": "A filter that compares a field with a string containing an apostrophe never matches in the Chroma and Weaviate connectors. The parser doubles the apostrophe before passing the value on, which is escaping for SQL, but these connectors pass the value as data in a where dictionary or a filter object, so the doubled text differs from the stored one.",
+    "expected": "A record whose name contains an apostrophe is found by an equality filter.",
+    "actual": "The search returns nothing, although a filter on a plain name works.",
+    "tags": [
+      "vector-store",
+      "parsing"
+    ],
+    "framework": "Semantic Kernel",
+    "language": "Python",
+    "fixReasoning": "Quote doubling belongs to queries that are assembled as SQL text. These stores take the value as structured data, where no escaping is needed, so escaping alters the value that is being compared. The reproduction against a real in-process Chroma client confirmed the doubled form in the generated filter.",
+    "fixChange": "Remove the apostrophe doubling from the string and bytes constants in the lambda parsers of the Chroma and Weaviate connectors, so that values are compared as they were written.",
+    "note": "Fixed upstream: microsoft/semantic-kernel change #14560"
+  },
+  {
+    "repository": "modelcontextprotocol/python-sdk",
+    "issueUrl": "https://github.com/modelcontextprotocol/python-sdk/issues/3324",
+    "fixUrl": "https://github.com/modelcontextprotocol/python-sdk/pull/3326",
+    "title": "The newer HTTP transport rejects client notifications that real clients send",
+    "summary": "On the per-request envelope path of the 2026-07-28 protocol version, the streamable HTTP transport answers any client notification with a 400 error saying the body must be a single request object, while the same notification is accepted with a 202 under the handshake era. Real clients do send cancellation notifications, so they got errors for a normal message.",
+    "expected": "A notification is acknowledged with 202 and dropped.",
+    "actual": "HTTP 400 with an invalid request error.",
+    "tags": [
+      "protocol",
+      "error-handling"
+    ],
+    "framework": "MCP Python SDK",
+    "language": "Python",
+    "fixReasoning": "Every body was validated as a request object, and a notification has no id, so it always took the invalid request branch. The transport specification allows two answers for a POST of a notification, acceptance or refusal, and the earlier choice of refusal had been marked as an open decision. Since real clients send notifications, accepting them is the interoperable choice.",
+    "fixChange": "Answer a POST that carries one JSON-RPC notification on the 2026-07-28 HTTP entry with 202 Accepted and no body, drop the notification, and stop returning a 400 for it.",
+    "note": "Fixed upstream: modelcontextprotocol/python-sdk change #3326"
+  },
+  {
+    "repository": "modelcontextprotocol/python-sdk",
+    "issueUrl": "https://github.com/modelcontextprotocol/python-sdk/issues/3235",
+    "fixUrl": "https://github.com/modelcontextprotocol/python-sdk/pull/3624",
+    "title": "A parameterized Context annotation gives prompt and resource handlers an empty Context",
+    "summary": "A prompt or resource template function annotated with a parameterized context type receives a different, empty object instead of the one the server injected for the request. Accessing the request context, session, request id or lifespan state then fails with an error that no context is available outside a request. The same annotation works on tools, and the unparameterized form works everywhere.",
+    "expected": "The handler receives the live context of the request.",
+    "actual": "A ValueError says that the context is not available outside of a request.",
+    "tags": [
+      "state",
+      "type-errors"
+    ],
+    "framework": "MCP Python SDK",
+    "language": "Python",
+    "fixReasoning": "Prompts and resource templates pass their call arguments through Pydantic validation, and the injected context went through it too. Because a parameterized context is a distinct class at runtime, Pydantic constructed a fresh object in place of the request context, and that object has none of the private fields that carry the request. The live object has to stay out of that step.",
+    "fixChange": "Keep the live context when a prompt or resource template annotates a parameterized Context, by leaving the injected object out of the Pydantic validation that was rebuilding it.",
+    "note": "Fixed upstream: modelcontextprotocol/python-sdk change #3624"
+  },
+  {
+    "repository": "modelcontextprotocol/python-sdk",
+    "issueUrl": "https://github.com/modelcontextprotocol/python-sdk/issues/3434",
+    "fixUrl": "https://github.com/modelcontextprotocol/python-sdk/pull/3623",
+    "title": "A failing progress callback breaks a successful tool call on the in-process connection",
+    "summary": "With the in-process client connection, a progress callback that raises takes the server's tool down with it: the exception crosses back into the tool, which then fails although it would otherwise return successfully. An inbound notification handler that raises also escapes to the sender. Over stdio and HTTP the same failures are logged and the operation carries on.",
+    "expected": "A callback failure is logged and the protocol operation continues, as with the stream-backed dispatcher.",
+    "actual": "The tool call reports an unexpected tool error.",
+    "tags": [
+      "error-handling",
+      "protocol"
+    ],
+    "framework": "MCP Python SDK",
+    "language": "Python",
+    "fixReasoning": "The stream-backed dispatcher contains callback failures at the boundary between the caller's code and the protocol, but the direct dispatcher let them propagate. The two transports should treat the caller's callbacks in the same way, so the in-process one has to catch and log them using the same message.",
+    "fixChange": "Make the direct dispatcher catch and log an exception raised by the caller's progress callback, and by an inbound notification handler, with the same message as the stream-backed dispatcher, so that the tool call and the notification send still complete.",
+    "note": "Fixed upstream: modelcontextprotocol/python-sdk change #3623"
+  },
+  {
+    "repository": "modelcontextprotocol/python-sdk",
+    "issueUrl": "https://github.com/modelcontextprotocol/python-sdk/issues/3126",
+    "fixUrl": "https://github.com/modelcontextprotocol/python-sdk/pull/3619",
+    "title": "A caller-supplied request id can later be minted again by the dispatcher",
+    "summary": "A caller may give its own request id through the call options. Once that request has finished, the dispatcher's counter can later produce the same value, so a session ends up sending two different requests with one id, although the protocol says an id must not be reused within a session.",
+    "expected": "The contract states clearly what the dispatcher guarantees about a supplied id.",
+    "actual": "The behaviour was undocumented, so a caller could not tell when reuse is possible.",
+    "tags": [
+      "protocol",
+      "state"
+    ],
+    "framework": "MCP Python SDK",
+    "language": "Python",
+    "fixReasoning": "Changing how identifiers are numbered would alter behaviour that other code relies on, and a supplied id never clashes with a request that is still in flight. The resolution was to document what is promised: integer ids and numeric strings draw on the counter of the dispatcher itself, so they can reappear after completion, while a string that does not parse as a number avoids that.",
+    "fixChange": "Document the contract of the request id option instead of renumbering: an in-flight duplicate raises a ValueError and the counter skips a supplied id, integer and numeric string ids share the counter and may be minted again after completion, and a non-numeric string is the way to keep an id unique for the whole session.",
+    "note": "Fixed upstream (documentation): modelcontextprotocol/python-sdk change #3619"
+  },
+  {
+    "repository": "modelcontextprotocol/python-sdk",
+    "issueUrl": "https://github.com/modelcontextprotocol/python-sdk/issues/3084",
+    "fixUrl": "https://github.com/modelcontextprotocol/python-sdk/pull/3076",
+    "title": "Tool name validation accepts one trailing newline",
+    "summary": "The regular expression that validates tool names ends with a dollar anchor. In Python's default mode that anchor also matches just before a single trailing newline, so a name ending in one newline passes although a newline is not an allowed character. The length check counts the newline, so a name of 127 characters plus a newline slips past both the length and the character checks.",
+    "expected": "A name with a trailing newline is rejected.",
+    "actual": "The name is reported as valid and no warning is logged.",
+    "tags": [
+      "validation",
+      "parsing"
+    ],
+    "framework": "MCP Python SDK",
+    "language": "Python",
+    "fixReasoning": "In non-multiline mode the dollar anchor accepts the end of the string and also the position before a final newline, so it is not a strict end of input. Anchoring with the absolute end of string, or a full match, closes the gap. Embedded newlines and other control characters were already handled.",
+    "fixChange": "Anchor the tool name pattern at the absolute end of the string instead of with a dollar sign, so a trailing newline fails validation, and add tests for such names.",
+    "note": "Fixed upstream: modelcontextprotocol/python-sdk change #3076"
+  },
+  {
+    "repository": "modelcontextprotocol/python-sdk",
+    "issueUrl": "https://github.com/modelcontextprotocol/python-sdk/issues/3224",
+    "fixUrl": "https://github.com/modelcontextprotocol/python-sdk/pull/3331",
+    "title": "Structured content for a TypedDict result contains nulls that its own output schema forbids",
+    "summary": "A tool whose return annotation is a TypedDict with optional keys publishes an output schema in which those properties cannot be null, yet the structured content materialises every omitted key as an explicit null. The response violates the schema that the same server just advertised, and a conforming client, including the SDK's own, rejects the call. The text block and the structured content also disagree.",
+    "expected": "Omitted optional keys stay absent in the structured content.",
+    "actual": "Each omitted key appears as null and the client rejects the result.",
+    "tags": [
+      "structured-output",
+      "schema"
+    ],
+    "framework": "MCP Python SDK",
+    "language": "Python",
+    "fixReasoning": "The server mirrored the TypedDict into a hand-built model that gave optional keys a default of None, and then serialized the defaults. That mirror was the shared root of several problems with TypedDict results. Pydantic supports TypedDict natively and keeps the distinction between absent and null, so validation and serialization should be handed to it.",
+    "fixChange": "Validate and serialize TypedDict tool results with the native TypedDict support of Pydantic rather than the hand-built mirror model, which fixes null injection for optional keys and the failure on bare qualifiers, and lets the docstring and field metadata reach the schema.",
+    "note": "Fixed upstream: modelcontextprotocol/python-sdk change #3331"
+  },
+  {
+    "repository": "huggingface/smolagents",
+    "issueUrl": "https://github.com/huggingface/smolagents/issues/1879",
+    "fixUrl": "https://github.com/huggingface/smolagents/pull/1881",
+    "title": "Callbacks registered for the final answer step are never executed",
+    "summary": "A code agent can register step callbacks for the final answer step, but running the agent never calls them. The finalizing method that invokes callbacks accepts only action and planning steps, and the run loop creates the final answer step and yields it directly without passing it through that method.",
+    "expected": "A callback registered for the final answer step runs when the step is produced.",
+    "actual": "The callback is never invoked.",
+    "tags": [
+      "callbacks",
+      "state"
+    ],
+    "framework": "smolagents",
+    "language": "Python",
+    "fixReasoning": "There were two gaps. The finalizing method's accepted step types left out the final answer step, and the run loop never called it for that step. Existing final answer checks run at the end of a run, but putting non-validation logic into them overloads their purpose, so a callback hook is the right place.",
+    "fixChange": "Allow the final answer step among the step types that the finalizing method accepts, and call that method for the final answer step in the run loop so registered callbacks execute.",
+    "note": "Fixed upstream: huggingface/smolagents change #1881"
+  },
+  {
+    "repository": "huggingface/smolagents",
+    "issueUrl": "https://github.com/huggingface/smolagents/issues/1905",
+    "fixUrl": "https://github.com/huggingface/smolagents/pull/1914",
+    "title": "Code written by an agent can catch the exception that ends the run with a final answer",
+    "summary": "The local Python executor rewrites the final answer function so that it raises a special exception. That exception derives from the ordinary Exception class, so agent-generated code that wraps a call in try and except Exception catches it, and the final answer is then swallowed and the run behaves in unexpected ways.",
+    "expected": "Generated code cannot intercept the signal that finishes the run.",
+    "actual": "A broad except clause in the agent's code captures the final answer exception.",
+    "tags": [
+      "error-handling",
+      "sandbox"
+    ],
+    "framework": "smolagents",
+    "language": "Python",
+    "fixReasoning": "A broad except Exception clause is common in model-written code, and it catches everything that derives from Exception. A control-flow signal that must pass through user code should derive from the base exception class that such clauses do not catch, as the language itself does for exit and keyboard interrupts.",
+    "fixChange": "Make the final answer exception derive from BaseException instead of Exception, and add a test showing that code with a broad except block does not catch it.",
+    "note": "Fixed upstream: huggingface/smolagents change #1914"
+  },
+  {
+    "repository": "huggingface/smolagents",
+    "issueUrl": "https://github.com/huggingface/smolagents/issues/1876",
+    "fixUrl": "https://github.com/huggingface/smolagents/pull/1900",
+    "title": "Tool calls returned through LiteLLM cannot be serialized to JSON",
+    "summary": "After a refactor, the LiteLLM model put the provider's raw Pydantic tool call objects into a field that expects the library's own dataclasses. Serializing the step to JSON then fails because Pydantic objects are not directly serializable, so no agent could be used with a LiteLLM model.",
+    "expected": "Tool calls from any API are converted into the library's own tool call type.",
+    "actual": "An error says that an object of type ChatCompletionMessageToolCall is not JSON serializable.",
+    "tags": [
+      "serialization",
+      "model-provider"
+    ],
+    "framework": "smolagents with LiteLLM",
+    "language": "Python",
+    "fixReasoning": "The earlier code converted the message through a dictionary, which produced plain data, and the refactor passed the provider's objects through unchanged. Converting the tool calls explicitly into the library's tool call format restores plain data and makes the behaviour the same for every provider.",
+    "fixChange": "Coerce tool calls coming from model APIs into the library's ChatMessageToolCall format when building a chat message, so that they serialize correctly.",
+    "note": "Fixed upstream: huggingface/smolagents change #1900"
+  },
+  {
+    "repository": "huggingface/smolagents",
+    "issueUrl": "https://github.com/huggingface/smolagents/issues/1825",
+    "fixUrl": "https://github.com/huggingface/smolagents/pull/1826",
+    "title": "A tool-only reply from a GPT-5 model crashes stop sequence trimming",
+    "summary": "When a GPT-5 model answers a step with only a tool call, the API returns the message content as None. The function that removes text after stop sequences still tries to split that value, and raises an attribute error saying that None has no split method.",
+    "expected": "A reply without text content passes through untouched.",
+    "actual": "An AttributeError ends the step.",
+    "tags": [
+      "type-errors",
+      "tool-calling"
+    ],
+    "framework": "smolagents with OpenAI",
+    "language": "Python",
+    "fixReasoning": "The function assumed that content is always a string. Providers return no content for tool-only turns, so a missing value has to be treated as nothing to trim. Empty stop strings would also truncate everything and a missing stop list is legal, so both are handled as well.",
+    "fixChange": "Treat a content value of None and a stop list of None as no-ops in the trimming function, and ignore empty stop strings so that they cannot cause accidental truncation.",
+    "note": "Fixed upstream: huggingface/smolagents change #1826"
+  },
+  {
+    "repository": "huggingface/smolagents",
+    "issueUrl": "https://github.com/huggingface/smolagents/issues/1814",
+    "fixUrl": "https://github.com/huggingface/smolagents/pull/1823",
+    "title": "The local Python executor fails on nested loops inside dictionary and set comprehensions",
+    "summary": "Code that builds a dictionary with two for clauses in one comprehension fails in the local Python executor with an error that a variable is not defined. List comprehensions with nested loops were already supported, but the dictionary and set comprehension evaluators handled only a single generator.",
+    "expected": "Nested loops work in all comprehension kinds.",
+    "actual": "An InterpreterError reports the loop variable as undefined.",
+    "tags": [
+      "sandbox",
+      "parsing"
+    ],
+    "framework": "smolagents",
+    "language": "Python",
+    "fixReasoning": "The list comprehension evaluator already walks several generators in order, binding the variables of the outer ones before the inner ones, while the other two evaluators did not. Following the same process in them gives the same behaviour.",
+    "fixChange": "Extend the dictionary comprehension and set comprehension evaluators to process several for clauses in nesting order, in the same way the list comprehension evaluator already does.",
+    "note": "Fixed upstream: huggingface/smolagents change #1823"
+  },
+  {
+    "repository": "huggingface/smolagents",
+    "issueUrl": "https://github.com/huggingface/smolagents/issues/1742",
+    "fixUrl": "https://github.com/huggingface/smolagents/pull/1763",
+    "title": "Detailed replay of an agent run fails because a message is not iterable",
+    "summary": "Calling the replay method with detailed output on an agent that has finished a run raises an error saying that the chat message object is not iterable. The replay code converts each message with the dict built-in, which works for plain mappings but not for a Pydantic-style message object.",
+    "expected": "A detailed replay prints the steps and their messages.",
+    "actual": "A TypeError stops the replay.",
+    "tags": [
+      "serialization",
+      "type-errors"
+    ],
+    "framework": "smolagents",
+    "language": "Python",
+    "fixReasoning": "The built-in conversion expects an iterable of pairs or a mapping, and the message type provides its own method for turning itself into a dictionary. Using that method is the correct way to convert the object, and it keeps replay stable when detailed logging is on.",
+    "fixChange": "Replace the call that converts a message with the dict built-in by the message's own dictionary conversion method in the memory replay, and add a unit test for the detailed replay.",
+    "note": "Fixed upstream: huggingface/smolagents change #1763"
+  },
+  {
+    "repository": "huggingface/smolagents",
+    "issueUrl": "https://github.com/huggingface/smolagents/issues/1785",
+    "fixUrl": "https://github.com/huggingface/smolagents/pull/1786",
+    "title": "Generating a code agent step sometimes fails because logging receives None",
+    "summary": "While a code agent runs a step, the logger is handed the model's output text, and when that text is None the markdown logging raises an attribute error saying that None has no endswith method. The step then fails with a generation error. It happened only occasionally, about twice in fifty parallel runs, which made it hard to reproduce.",
+    "expected": "A missing output text does not break the step.",
+    "actual": "An AgentGenerationError wraps the attribute error.",
+    "tags": [
+      "error-handling",
+      "type-errors"
+    ],
+    "framework": "smolagents",
+    "language": "Python",
+    "fixReasoning": "The model may return no text for a step, and the logging call assumed a string. Making sure that the logger always receives a string removes the failure at its source, without needing to change what the model returns.",
+    "fixChange": "Make the step streaming method pass a string to the logger even when the output text is None, so the logging call can no longer raise an attribute error.",
+    "note": "Fixed upstream: huggingface/smolagents change #1786"
+  },
+  {
+    "repository": "huggingface/smolagents",
+    "issueUrl": "https://github.com/huggingface/smolagents/issues/1765",
+    "fixUrl": "https://github.com/huggingface/smolagents/pull/1766",
+    "title": "The check for stop parameter support wrongly allows two xAI Grok models",
+    "summary": "The helper that decides whether a model accepts the stop parameter returns true for xAI's grok-4 and grok-3-mini, but these models do not support it, so inference fails. The helper already excluded some other models, such as GPT-5.",
+    "expected": "The helper reports that these Grok models do not support the stop parameter.",
+    "actual": "The request includes the parameter and the model call fails.",
+    "tags": [
+      "model-provider",
+      "configuration"
+    ],
+    "framework": "smolagents with LiteLLM",
+    "language": "Python",
+    "fixReasoning": "Support is decided by a list of model families that are known not to accept the parameter, and the xAI models were missing from it. Extending the list in the same way as an earlier change for other models fixes the requests for them.",
+    "fixChange": "Update the stop parameter support check so that it returns false for the xAI Grok models grok-4 and grok-3-mini, next to the models already excluded.",
+    "note": "Fixed upstream: huggingface/smolagents change #1766"
+  },
+  {
+    "repository": "langchain-ai/langgraph",
+    "issueUrl": "https://github.com/langchain-ai/langgraph/issues/9180",
+    "fixUrl": "https://github.com/langchain-ai/langgraph/pull/9409",
+    "title": "The checkpoint at an after-interrupt pause is never sent on the checkpoints and debug streams",
+    "summary": "When a run stops at a pause configured to occur after a node, or at the recursion limit, the checkpoint at which it stopped is never emitted on the checkpoints or debug stream. A client that resumes from the last checkpoint it has seen therefore executes the final node a second time.",
+    "expected": "The final checkpoint of every run is streamed.",
+    "actual": "It is missing for runs stopped by an interrupt after a node or by the recursion limit.",
+    "tags": [
+      "streaming",
+      "state"
+    ],
+    "framework": "LangGraph",
+    "language": "Python",
+    "fixReasoning": "A checkpoint is streamed when the next tick begins, once its pending tasks are known. A pause after a node raises directly after the save, and the recursion limit ends the run at the beginning of the next tick, before that step, so in both cases the code that streams the checkpoint was never reached.",
+    "fixChange": "Relocate the code that prepares the pending tasks and streams the checkpoint so that a run final checkpoint is also streamed when the run stops at an interrupt after a node or at the recursion limit.",
+    "note": "Fixed upstream: langchain-ai/langgraph change #9409"
+  },
+  {
+    "repository": "langchain-ai/langgraph",
+    "issueUrl": "https://github.com/langchain-ai/langgraph/issues/8383",
+    "fixUrl": "https://github.com/langchain-ai/langgraph/pull/9399",
+    "title": "The synchronous runs client ignores raise_error for failed runs and its retry reuses stale headers",
+    "summary": "The synchronous client accepts a raise_error argument when waiting on a run, but the error payload of a failed run came back as an ordinary result, and the argument was even forwarded to the server. A related bug hit the retry after a response broke off mid-read: the GET to the location carried over the body headers of the original POST, so the single retry always failed.",
+    "expected": "A failed run raises when asked to, and a retry is a clean body-less GET.",
+    "actual": "The error is returned as data, and the retry fails with a protocol error.",
+    "tags": [
+      "error-handling",
+      "retries"
+    ],
+    "framework": "LangGraph SDK",
+    "language": "Python",
+    "fixReasoning": "The async client implemented the raising behaviour while the sync one merely gained the argument. For the retry, headers describing a request body were copied to a request without one, which the HTTP library rejects, and the sync client additionally sent a JSON null body with each body-less request of this kind.",
+    "fixChange": "Raise from the sync wait when raise_error is set and a run fails, without sending the argument to the server, and retry with a body-less GET that drops the body headers, with no JSON null body for body-less requests.",
+    "note": "Fixed upstream: langchain-ai/langgraph change #9399"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5470",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5643",
+    "title": "Guardrail results of an approved tool are dropped when the resumed run continues to another turn",
+    "summary": "A tool that needs approval and has both input and output guardrails runs them after approval when the run is resumed. If the resumed turn goes on to another model call, which is the usual case, the guardrail results are lost from the run result and from later checkpoints, in normal and streamed runs. Without approval, the same tool reports one result of each type.",
+    "expected": "Every executed guardrail's result is kept.",
+    "actual": "The results are missing from the result and the checkpoint.",
+    "tags": [
+      "human-in-the-loop",
+      "validation"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "Earlier fixes kept these results on the path where the run is interrupted, but the path where the resumed turn loops back to the model did not carry them forward. They have to be passed on into the final result and checkpoint, with the checks made before and after approval each keeping its own output.",
+    "fixChange": "Pass the result of each executed guardrail on into the final result and its checkpoint in both runner modes, and keep the input checks made before and after approval as separate results when checks before approval are enabled.",
+    "note": "Fixed upstream: openai/openai-agents-python change #5643"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5459",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5645",
+    "title": "A SQL session on PostgreSQL returns items out of order when timestamps are not monotonic",
+    "summary": "The session reads and pops items ordered first by a timestamp column and second by id. On PostgreSQL the default timestamp is the start time of the transaction expressed in the connection's time zone setting, so it does not follow append order: writers with different time zone settings, or a long transaction, can write a later item with an earlier timestamp. History is then returned in the wrong order and the wrong item can be popped.",
+    "expected": "History follows the order in which items were appended.",
+    "actual": "Ordering depends on timestamps that can go backwards.",
+    "tags": [
+      "state",
+      "memory"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "A tie-breaker only helps with equal timestamps, not with timestamps that decrease. The generated message id grows in append order, so ordering by it alone is consistent for reads, pops and compaction, and it needs no migration of existing tables.",
+    "fixChange": "Use the generated message id consistently for ordering in reads, pops and compaction, keep existing tables working without a migration, and add an index on the session id and the message id for new tables.",
+    "note": "Fixed upstream: openai/openai-agents-python change #5645"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5415",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5419",
+    "title": "Replaying a stored conversation through a Chat Completions model fails on the second turn",
+    "summary": "With a conversations session and a model that uses the Chat Completions API, the second turn fails with an error about an unhandled item type. The runner removes the storage id from assistant messages loaded from the conversation, and the converter then no longer recognises the remaining item, because it requires an id and its status key keeps it from the simple message path. This worked in an earlier release.",
+    "expected": "A stored assistant message is replayed to the model.",
+    "actual": "A UserError says the item type or structure is not handled.",
+    "tags": [
+      "state",
+      "model-provider"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "Sanitization and conversion disagreed: one step strips the id on purpose, and the other insisted on it. The converter should accept assistant output without an id, including output text and refusal parts and messages with no status, while the sanitization and the handling of items with ids stay as they were.",
+    "fixChange": "Accept assistant output items without an id in the converter, covering output text and refusal parts and normalized messages without status, through the existing conversion path, and add transport-level regression tests for streaming and non-streaming runs.",
+    "note": "Fixed upstream: openai/openai-agents-python change #5419"
+  },
+  {
+    "repository": "langchain-ai/langchain",
+    "issueUrl": "https://github.com/langchain-ai/langchain/issues/41155",
+    "fixUrl": "https://github.com/langchain-ai/langchain/pull/41159",
+    "title": "The summarization middleware retries the same request after a context overflow",
+    "summary": "The middleware wraps its summary model in a retry helper so that transient errors such as rate limits are retried. The helper's default retries every exception, including the context overflow error, and an overflow is deterministic for a given input, so the second and third attempts send the identical prompt, cannot succeed and only delay the error.",
+    "expected": "Non-retryable errors are not retried, and an overflowing summary step is retried with a smaller input.",
+    "actual": "Three identical requests are sent and the error is delayed.",
+    "tags": [
+      "retries",
+      "context-window"
+    ],
+    "framework": "LangChain",
+    "language": "Python",
+    "fixReasoning": "Retrying only makes sense when the next attempt can differ from the last one. A context overflow needs a smaller prompt, so the middleware should skip it in the generic retry and instead retry once with conservative trimming, using the standard model exception classes to tell retryable errors from the others.",
+    "fixChange": "Retry the summarization step with conservative trimming when it overflows the context, and use the standard model exception classes so that non-retryable errors such as context overflow are skipped by the generic retry.",
+    "note": "Fixed upstream: langchain-ai/langchain change #41159"
+  },
+  {
+    "repository": "langchain-ai/langchain",
+    "issueUrl": "https://github.com/langchain-ai/langchain/issues/40853",
+    "fixUrl": "https://github.com/langchain-ai/langchain/pull/40864",
+    "title": "Repairing an invalid tool call makes Anthropic conversations fail with a 400 error",
+    "summary": "The agent factory repairs an invalid tool call by adding a tool result message for it. Serialized for Anthropic, the history then holds a tool result block that points at a tool use id that no tool use block carries, because the invalid call itself was not serialized, and the provider rejects the thread with a 400 error. After one invalid tool call the whole thread is broken.",
+    "expected": "Every tool result has a matching tool use block.",
+    "actual": "Anthropic rejects the request with a 400 error.",
+    "tags": [
+      "tool-calling",
+      "model-provider"
+    ],
+    "framework": "LangChain with Anthropic",
+    "language": "Python",
+    "fixReasoning": "The repair is correct for other providers, but the Anthropic serializer dropped the invalid tool calls of a message while keeping the repaired results that refer to them. Serializing the invalid calls as tool use blocks restores the pairing without changing the agent's repair logic.",
+    "fixChange": "Serialize the invalid tool calls of an AI message as Anthropic tool use blocks, using a valid dictionary of arguments or an empty one when they are malformed, skip calls that lack an id or a name, and avoid duplicates if the content or tool calls already hold the same id.",
+    "note": "Fixed upstream: langchain-ai/langchain change #40864"
+  },
+  {
+    "repository": "langchain-ai/langchain",
+    "issueUrl": "https://github.com/langchain-ai/langchain/issues/39039",
+    "fixUrl": "https://github.com/langchain-ai/langchain/pull/40791",
+    "title": "Failed or errored streams from the OpenAI Responses API look like successful completions",
+    "summary": "The Responses API ends a stream with one of four terminal events. The streaming converter handled the completed and incomplete ones and recorded their status, but the failed and error events fell into a branch that discarded them. A stream that finished with no terminal event at all was also returned as if it had succeeded, so a failure could not be told from a good result.",
+    "expected": "An error event raises an exception.",
+    "actual": "Failure events are silently ignored.",
+    "tags": [
+      "streaming",
+      "error-handling"
+    ],
+    "framework": "LangChain with OpenAI",
+    "language": "Python",
+    "fixReasoning": "The converter's else branch ignored every event type it did not recognise, and failure events are among those. Raising on them turns a silent failure into one the caller can handle, using the same stream path that normal events take.",
+    "fixChange": "Raise an exception on error events in the Responses API streaming path instead of discarding them.",
+    "note": "Fixed upstream: langchain-ai/langchain change #40791"
+  }
+]
