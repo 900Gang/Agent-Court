@@ -46,8 +46,8 @@ function issueNumberOf(raw: unknown): number | null {
 const byPosition = (a: { position: number }, b: { position: number }) => a.position - b.position;
 
 /**
- * Imports a batch of manifest entries, or rehearses it. A rehearsal runs the very same import for every entry inside one
- * transaction and rolls the transaction back, so it reports exactly what the real run would and writes nothing.
+ * Imports a batch of manifest entries, or rehearses it. A rehearsal runs the very same import for every entry inside its own
+ * transaction and rolls that transaction back, so it reports exactly what the real run would and writes nothing.
  * A run is refused as a whole when it is larger than IMPORT.maxBatch, or when one repository fills more than
  * IMPORT.perRepositoryShare of a batch of 20 or more: a warning in a rehearsal, an error when applying.
  */
@@ -116,8 +116,8 @@ export async function runImport(
   report.importer = existing ? "present" : "would_create";
   if (apply && report.errors.length > 0) return finish(report);
 
-  async function work(target: Database): Promise<void> {
-    for (const { position, issue, entry } of candidates) {
+  async function work(target: Database, batch: typeof candidates): Promise<void> {
+    for (const { position, issue, entry } of batch) {
       let result;
       try {
         result = await importCase(target, gate, entry, now);
@@ -145,16 +145,21 @@ export async function runImport(
   if (apply) {
     await ensureImporter(db);
     if (!existing) report.importer = "created";
-    await work(db);
+    await work(db, candidates);
   } else {
-    try {
-      await db.transaction(async (tx) => {
-        await ensureImporter(tx);
-        await work(tx);
-        throw new Rehearsal();
-      });
-    } catch (error) {
-      if (!(error instanceof Rehearsal)) throw error;
+    // One short rolled-back transaction per entry, not one long one: a long transaction over a slow connection can stall or drop.
+    // Repeats inside the batch were already set aside above, so each entry sees the same database the real run would.
+    for (const candidate of candidates) {
+      if (report.errors.length > 0) break;
+      try {
+        await db.transaction(async (tx) => {
+          await ensureImporter(tx);
+          await work(tx, [candidate]);
+          throw new Rehearsal();
+        });
+      } catch (error) {
+        if (!(error instanceof Rehearsal)) throw error;
+      }
     }
   }
   return finish(report);

@@ -1,0 +1,902 @@
+[
+  {
+    "repository": "langchain-ai/langchain",
+    "issueUrl": "https://github.com/langchain-ai/langchain/issues/40826",
+    "fixUrl": "https://github.com/langchain-ai/langchain/pull/41467",
+    "title": "Streaming a JSON answer followed by prose gets slower with every chunk",
+    "summary": "When a model streams a JSON object and then keeps writing explanation text, the JSON output parser re-parses everything it has received on every chunk. Once the object is complete, each new chunk triggers a decode attempt per character of trailing prose, so the stream stalls as the prose grows.",
+    "expected": "Parsing time stays roughly proportional to the amount of text received.",
+    "actual": "Time per chunk grows with the length of the trailing text, because of repeated full decodes.",
+    "tags": [
+      "parsing",
+      "streaming"
+    ],
+    "framework": "LangChain",
+    "language": "Python",
+    "fixReasoning": "After repairing the partial JSON, the parser's fallback trimmed the end of the text one character at a time and decoded the whole string after each trim. For valid JSON with a long tail of prose that is quadratic work, repeated on every streamed chunk. The fallback has to skip ahead instead of retrying one character at a time.",
+    "fixChange": "Change the partial JSON parser's fallback so that, when repaired JSON still fails to decode, it no longer trims a single character and re-decodes the whole string on each retry, which removes the quadratic cost on long invalid tails.",
+    "note": "Fixed upstream: langchain-ai/langchain change #41467"
+  },
+  {
+    "repository": "langchain-ai/langchain",
+    "issueUrl": "https://github.com/langchain-ai/langchain/issues/41526",
+    "fixUrl": "https://github.com/langchain-ai/langchain/pull/41553",
+    "title": "Anthropic usage metadata crashes when a cache creation count is null",
+    "summary": "While turning an Anthropic response's token usage into LangChain metadata, the code adds up the cache creation counts. If the provider reports one of those time-to-live counts as an explicit null, the addition fails with a type error and the whole response handling crashes.",
+    "expected": "Null counts are ignored and the usage metadata is still produced.",
+    "actual": "A TypeError is raised for adding an integer and None.",
+    "tags": [
+      "model-provider",
+      "type-errors"
+    ],
+    "framework": "LangChain with Anthropic",
+    "language": "Python",
+    "fixReasoning": "The summing logic assumed every cache creation entry was a number. A key that was present but held null passed the presence check and then could not be added. Handling nulls explicitly keeps the sum valid and leaves null details out of the result.",
+    "fixChange": "Treat null cache creation token counts as absent when building usage metadata, so the sum no longer fails, and omit null token details from the output. Correct the regression test to expect the missing key.",
+    "note": "Fixed upstream: langchain-ai/langchain change #41553"
+  },
+  {
+    "repository": "langchain-ai/langchain",
+    "issueUrl": "https://github.com/langchain-ai/langchain/issues/40077",
+    "fixUrl": "https://github.com/langchain-ai/langchain/pull/40213",
+    "title": "Reading content blocks silently deletes the index from the stored message",
+    "summary": "Accessing the read-only looking content blocks view of an Anthropic message changes the message's own stored content. For an unrecognised block type, the converter wraps the original block by reference and then removes its index, so the index disappears from the message itself. Bedrock messages for Claude models share the same code and the same problem.",
+    "expected": "Reading a derived view leaves the message content unchanged, and repeated reads agree.",
+    "actual": "The first read removes the index from the stored content, so later reads differ.",
+    "tags": [
+      "state",
+      "model-provider"
+    ],
+    "framework": "LangChain",
+    "language": "Python",
+    "fixReasoning": "The fallback branch put the original block inside the new one by reference and then popped the index key. Because both names pointed at the same dictionary, the pop edited the message's own data. Taking a copy before the index is lifted off keeps the original intact.",
+    "fixChange": "Copy the block before lifting the index off it in the Anthropic translator, which the Bedrock converter reuses, and add regression tests for both providers that check the content is unchanged and that repeated reads agree.",
+    "note": "Fixed upstream: langchain-ai/langchain change #40213"
+  },
+  {
+    "repository": "langchain-ai/langgraph",
+    "issueUrl": "https://github.com/langchain-ai/langgraph/issues/9016",
+    "fixUrl": "https://github.com/langchain-ai/langgraph/pull/9554",
+    "title": "A run stream that closes cleanly before the run ends looks like a finished run",
+    "summary": "When the connection carrying a run's event stream ends normally, for example after a proxy timeout or a server restart, before the run has finished, the Python SDK treats the stream as complete. It reconnects only after a transport error, so the caller silently receives a truncated answer with no error.",
+    "expected": "The client notices that the run is still going and rejoins the stream.",
+    "actual": "The partial stream ends with no end event and no error.",
+    "tags": [
+      "streaming",
+      "timeout"
+    ],
+    "framework": "LangGraph SDK",
+    "language": "Python",
+    "fixReasoning": "The reconnection logic lived only in the error path of the stream loop, and a clean close simply left the loop. Servers usually send no end event, so a clean close alone cannot say whether the run is over. The client therefore asks for the run's status when the stream belonged to a run and no end or error event arrived, and rejoins only if the run is still pending or running.",
+    "fixChange": "After a clean close of a run stream without an end or error event, query the run's status with a JSON request and rejoin the stream when the run is pending or running, treating failures of that check like a dropped connection. The change covers both the sync and the async client.",
+    "note": "Fixed upstream: langchain-ai/langgraph change #9554"
+  },
+  {
+    "repository": "langchain-ai/langgraph",
+    "issueUrl": "https://github.com/langchain-ai/langgraph/issues/8608",
+    "fixUrl": "https://github.com/langchain-ai/langgraph/pull/9408",
+    "title": "Error handler on a node runs but the original error is still raised",
+    "summary": "A node can declare an error handler that should recover from its failure. In several configurations, such as streaming messages or custom data, enabling subgraph events, or running next to a parallel node, the handler ran but the original exception was raised anyway and the run failed. With only task or debug streaming, the failed task's result and its error were also never streamed.",
+    "expected": "A handled failure does not surface as an error, and the run continues as the handler decides.",
+    "actual": "The handler's recovery was ignored and the run still failed.",
+    "tags": [
+      "error-handling",
+      "streaming"
+    ],
+    "framework": "LangGraph",
+    "language": "Python",
+    "fixReasoning": "The runner marked the failed task as handled, but the executors used on the streaming and parallel paths re-raised every failed future when they exited, without looking at that mark. Separately, a fast path for single tasks raised before the caller had drained the stream queue, so the failed result never reached the stream.",
+    "fixChange": "Move the handled marker into the executor module and make both executors skip futures that carry it, and make the single-task fast path yield once before re-raising so failed task results, with their error, are streamed.",
+    "note": "Fixed upstream: langchain-ai/langgraph change #9408"
+  },
+  {
+    "repository": "langchain-ai/langgraph",
+    "issueUrl": "https://github.com/langchain-ai/langgraph/issues/8218",
+    "fixUrl": "https://github.com/langchain-ai/langgraph/pull/9406",
+    "title": "A tool that pauses with interrupt is reported as a failed tool on the stream",
+    "summary": "When a tool calls interrupt to wait for human input, the tools event stream reports a tool error and flattens the interrupt object into text. A pause is control flow rather than a failure, and consumers can no longer recover the structured interrupt id and value. A subagent waiting for approval inside a tool made the outer tool look failed.",
+    "expected": "A paused tool ends its events without an error and resumes normally later.",
+    "actual": "A tool error event is emitted, carrying the interrupt as a plain string.",
+    "tags": [
+      "human-in-the-loop",
+      "streaming"
+    ],
+    "framework": "LangGraph",
+    "language": "Python",
+    "fixReasoning": "The stream handler emitted an error event for every exception it saw, and an interrupt is raised as an exception that the framework uses as a bubble-up signal. The handler has to end the tool's events quietly for an interrupt or a drain, since the tool runs again on resume, while a parent command still ends the call with an error as before.",
+    "fixChange": "Stop emitting a tool error for interrupts and drains, so a resumed tool emits fresh started and finished events, keep error events for parent commands, and no longer force every node into streaming mode just because the tools handler is attached.",
+    "note": "Fixed upstream: langchain-ai/langgraph change #9406"
+  },
+  {
+    "repository": "langchain-ai/langgraph",
+    "issueUrl": "https://github.com/langchain-ai/langgraph/issues/9284",
+    "fixUrl": "https://github.com/langchain-ai/langgraph/pull/9407",
+    "title": "An awaited task inside a graph node returns None when events are streamed",
+    "summary": "A task function awaited from inside a state graph node returns its value when the graph is simply invoked. When the same graph is run through the event streaming API, which turns streaming mode on, the awaiting node receives None instead, so the state that follows is wrong.",
+    "expected": "The awaited task's value is the same with and without streaming.",
+    "actual": "The node receives None under event streaming.",
+    "tags": [
+      "async",
+      "streaming"
+    ],
+    "framework": "LangGraph",
+    "language": "Python",
+    "fixReasoning": "In streaming mode the retry runner drains the task's stream and returned nothing, so the awaiting node got no value. The task had written its result; it just was never looked up and handed back.",
+    "fixChange": "Return the value the task wrote when draining its stream, on both the path with a timeout and the one without, and add tests for both versions of the event stream, including a task that returns a falsy value.",
+    "note": "Fixed upstream: langchain-ai/langgraph change #9407"
+  },
+  {
+    "repository": "langchain-ai/langgraph",
+    "issueUrl": "https://github.com/langchain-ai/langgraph/issues/9416",
+    "fixUrl": "https://github.com/langchain-ai/langgraph/pull/9417",
+    "title": "An explicit recursion limit equal to the default is ignored by with_config",
+    "summary": "When a graph already has a recursion limit bound, calling with_config with a limit that happens to equal the default silently keeps the earlier bound value. With the default raised through an environment variable, an agent meant to stop at that limit kept running to a much larger bound.",
+    "expected": "An explicitly set limit always applies, even when it equals the default.",
+    "actual": "The earlier bound limit survives, so a looping agent runs far longer than intended.",
+    "tags": [
+      "loops",
+      "configuration"
+    ],
+    "framework": "LangGraph",
+    "language": "Python",
+    "fixReasoning": "Config merging decided whether a limit was set by comparing it to the default value, so an explicit limit that matched the default looked like no limit at all. A sentinel type that marks only the automatically filled default fixes this: an explicit equal value is applied, while the automatically filled value never takes precedence over a limit that was bound earlier.",
+    "fixChange": "Fill the default recursion limit with a private int subclass and have the merge skip values of that type instead of any equal number, which also covers copied or pickled configs and every place where configs are merged.",
+    "note": "Fixed upstream: langchain-ai/langgraph change #9417"
+  },
+  {
+    "repository": "langchain-ai/langgraph",
+    "issueUrl": "https://github.com/langchain-ai/langgraph/issues/9084",
+    "fixUrl": "https://github.com/langchain-ai/langgraph/pull/9400",
+    "title": "Tags supplied when invoking a graph multiply as the run descends into subgraphs",
+    "summary": "Tags given when invoking a graph are duplicated each time the run enters a subgraph: a node one level down sees each tag twice and a node three levels down sees it eight times. The copies show up in the node's config, in the metadata of streamed messages and in traces.",
+    "expected": "Each tag appears exactly once at every depth.",
+    "actual": "The number of copies doubles at every level of nesting.",
+    "tags": [
+      "tracing",
+      "state"
+    ],
+    "framework": "LangGraph",
+    "language": "Python",
+    "fixReasoning": "Config setup appends tags from explicit configs to those of the ambient config so that bound tags survive. A subgraph receives its parent's config, which the ambient config already carries, so the parent's tags were added again at each level.",
+    "fixChange": "Make the config setup skip tags that the ambient config already has; tags that recur across several explicit configs are still joined together as they were before.",
+    "note": "Fixed upstream: langchain-ai/langgraph change #9400"
+  },
+  {
+    "repository": "microsoft/autogen",
+    "issueUrl": "https://github.com/microsoft/autogen/issues/6268",
+    "fixUrl": "https://github.com/microsoft/autogen/pull/6651",
+    "title": "Assistant agent stops after one round of tool calls",
+    "summary": "The assistant agent in AgentChat performs at most one round of tool calls per turn, although many models are trained to call tools repeatedly and reflect on the results before answering. Multi-step tasks that need chained tool use cannot finish within a single turn.",
+    "expected": "The agent keeps calling tools until the model gives a plain answer or hands off.",
+    "actual": "After one round of tool calls the turn ends, whatever the model wanted to do next.",
+    "tags": [
+      "tool-calling",
+      "loops"
+    ],
+    "framework": "AutoGen AgentChat",
+    "language": "Python",
+    "fixReasoning": "The agent had no mode in which the results of tool calls were fed back to the model for further calls within the same turn. An optional loop setting, off by default so existing behaviour is unchanged, lets the agent continue until the model answers without a tool call or issues a handoff.",
+    "fixChange": "Add an opt-in tool call loop option to the assistant agent so consecutive tool calls can be chained within one turn until the model replies without a tool call or hands off, and keep the old single-round behaviour as the default.",
+    "note": "Fixed upstream: microsoft/autogen change #6651"
+  },
+  {
+    "repository": "crewAIInc/crewAI",
+    "issueUrl": "https://github.com/crewAIInc/crewAI/issues/7740",
+    "fixUrl": "https://github.com/crewAIInc/crewAI/pull/9035",
+    "title": "Tool-using agents fail on some GPT-6 models because the retry sends an unsupported reasoning setting",
+    "summary": "With some newer GPT-6 models, a chat completions request that combines function tools with a reasoning effort is rejected. The library retries with the effort set to none, as the error suggests, but the most capable models refuse that value too, so every agent with a tool fails with an error about a setting the user never chose.",
+    "expected": "An agent with tools answers, as it does with other models of the family or when the Responses API is chosen explicitly.",
+    "actual": "A 400 error reports that the retry value is not supported.",
+    "tags": [
+      "tool-calling",
+      "model-provider"
+    ],
+    "framework": "CrewAI",
+    "language": "Python",
+    "fixReasoning": "The recovery path assumed one workaround fit every model in the family: retry with the effort turned off. For models that refuse that value there is no valid chat completions request with tools, so retrying cannot succeed, while the same call is accepted on the Responses API.",
+    "fixChange": "Send tool calls for the affected models through the Responses API and remember per model that its calls should go there directly, skip the retry when the error does not offer that value, and no longer log an error for the refused retry. Covers sync and async calls, streaming or not.",
+    "note": "Fixed upstream: crewAIInc/crewAI change #9035"
+  },
+  {
+    "repository": "crewAIInc/crewAI",
+    "issueUrl": "https://github.com/crewAIInc/crewAI/issues/9053",
+    "fixUrl": "https://github.com/crewAIInc/crewAI/pull/9058",
+    "title": "None metadata values abort document ingestion into ChromaDB",
+    "summary": "The helper that prepares metadata for ChromaDB keeps None values, but the database accepts only strings, integers, floats and booleans and rejects a None when the document is written. Loaders can produce None, for example for a video with no description, so adding such a source aborts ingestion instead of storing the content.",
+    "expected": "Metadata that the database cannot hold is left out and the content is stored.",
+    "actual": "The write fails with a type error about converting the metadata value.",
+    "tags": [
+      "vector-store",
+      "type-errors"
+    ],
+    "framework": "CrewAI Tools",
+    "language": "Python",
+    "fixReasoning": "The sanitizer's rule for what to keep explicitly allowed None next to the four supported types, which contradicts what the store accepts. Skipping the None entries lets the rest of the metadata be written.",
+    "fixChange": "Skip None values in the metadata sanitizer so that only strings, integers, floats and booleans reach ChromaDB.",
+    "note": "Fixed upstream: crewAIInc/crewAI change #9058"
+  },
+  {
+    "repository": "crewAIInc/crewAI",
+    "issueUrl": "https://github.com/crewAIInc/crewAI/issues/8679",
+    "fixUrl": "https://github.com/crewAIInc/crewAI/pull/8678",
+    "title": "Token usage is missing for tool-call turns and structured output on the LiteLLM path",
+    "summary": "For models routed through the LiteLLM fallback, two kinds of calls never report token usage: turns where the model returns tool calls, and structured output requested through a response model. Traces then show requests with zero tokens and zero cost, while the native providers report usage for the same calls.",
+    "expected": "Every call emits a completion event with its usage filled in.",
+    "actual": "Tool-call turns emit no completion event, and structured-output calls emit one with no usage.",
+    "tags": [
+      "cost",
+      "tracing"
+    ],
+    "framework": "CrewAI with LiteLLM",
+    "language": "Python",
+    "fixReasoning": "The handlers returned tool calls without emitting the completion event that carries usage, in all four variants (sync, async, streaming and not), and the structured output path emitted that event without reading usage from the response. The native providers already emit usage before returning tool calls, so the LiteLLM path needed the same behaviour.",
+    "fixChange": "Emit a completion event with usage for tool-call turns in all four LiteLLM handlers and populate usage for structured output, matching what the native OpenAI and Azure providers already do.",
+    "note": "Fixed upstream: crewAIInc/crewAI change #8678"
+  },
+  {
+    "repository": "crewAIInc/crewAI",
+    "issueUrl": "https://github.com/crewAIInc/crewAI/issues/8641",
+    "fixUrl": "https://github.com/crewAIInc/crewAI/pull/8642",
+    "title": "Cleaning up provider files freezes the event loop while the provider is listed",
+    "summary": "The async cleanup function that deletes every file held at a provider calls the synchronous listing method, which makes network requests, directly on the running event loop. While the listing runs, which can take several paginated round trips, every other coroutine on the loop is stalled.",
+    "expected": "The listing runs without blocking other tasks.",
+    "actual": "Streaming, other tool calls and timers freeze for the length of the listing.",
+    "tags": [
+      "async",
+      "concurrency"
+    ],
+    "framework": "CrewAI",
+    "language": "Python",
+    "fixReasoning": "Deletion in that function had already been moved off the loop, but the listing step stayed synchronous, and the uploaders have no async listing method. Running the existing blocking call in a worker thread keeps the loop responsive without changing any uploader interface.",
+    "fixChange": "Run the provider listing in a worker thread from the async cleanup function, and add a regression test in which a ticker coroutine must keep running while a slow listing executes.",
+    "note": "Fixed upstream: crewAIInc/crewAI change #8642"
+  },
+  {
+    "repository": "crewAIInc/crewAI",
+    "issueUrl": "https://github.com/crewAIInc/crewAI/issues/8647",
+    "fixUrl": "https://github.com/crewAIInc/crewAI/pull/8648",
+    "title": "A guardrail returning a malformed result leaves its started event unclosed",
+    "summary": "A guardrail is expected to return a success flag and a value or an error string. If it returns the wrong shape, such as a non-string error or a tuple of three items, converting the result raises after the started event was emitted, and no completed event follows. The open scope breaks event pairing for the agent, the crew and later events, and leaves a trace span open.",
+    "expected": "The run fails with the same error, and the started event is closed by a completed event marked as unsuccessful.",
+    "actual": "No completed event is emitted, so the scope stays on the event stack.",
+    "tags": [
+      "error-handling",
+      "tracing"
+    ],
+    "framework": "CrewAI",
+    "language": "Python",
+    "fixReasoning": "An earlier change wrapped the guardrail call itself so a raised exception still closes the started event, but the conversion of the returned value ran after that protected block. Moving the conversion inside it makes a malformed result take the same terminal path while the caller still gets the same exception.",
+    "fixChange": "Run the conversion of the guardrail's return value inside the protected block so a malformed result emits the completed event. All four callers share this function, so one change covers the agent, the lite agent and the sync and async task paths.",
+    "note": "Fixed upstream: crewAIInc/crewAI change #8648"
+  },
+  {
+    "repository": "crewAIInc/crewAI",
+    "issueUrl": "https://github.com/crewAIInc/crewAI/issues/8616",
+    "fixUrl": "https://github.com/crewAIInc/crewAI/pull/8617",
+    "title": "After one checkpointed run, copies of a crew replay the old results instead of executing",
+    "summary": "Saving a checkpoint writes runtime state into the crew's public checkpoint fields, and a finished run leaves an output on every task. Copying the crew carried all of that along, so the batch and evaluation helpers, which work on copies, resumed the old run, skipped every task and returned the stale results with no model calls, even when new inputs were supplied.",
+    "expected": "Each copy starts a fresh execution with the inputs it is given.",
+    "actual": "No task executes, and the previous run's outputs come back.",
+    "tags": [
+      "state",
+      "memory"
+    ],
+    "framework": "CrewAI",
+    "language": "Python",
+    "fixReasoning": "The resume logic looks at a checkpoint pointer and at which tasks already have output. A copy that kept both concluded that every task was done and started after the last one, while the saved inputs also shadowed the new ones. A copy has to carry no resume state at all.",
+    "fixChange": "Exclude the checkpoint pointers and inputs when copying a crew, and exclude the previous output and the checkpoint description fields when copying a task, with tests showing that a copy executes its tasks from the start.",
+    "note": "Fixed upstream: crewAIInc/crewAI change #8617"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5573",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5632",
+    "title": "A tool's default failure message urges a retry although the operation may already have been carried out",
+    "summary": "The default message returned to the model after any tool exception says to try again. When a tool raised after its write had already happened, for example because the reply was lost, a model that follows the text repeats the call and the effect happens twice, such as two orders being created. The SDK has no retry setting for tools, so this wording is the retry path for tools that write.",
+    "expected": "The default error text does not push the model to repeat a call that may have succeeded.",
+    "actual": "The model repeats the call and the side effect occurs twice.",
+    "tags": [
+      "retries",
+      "tool-calling"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "The SDK cannot tell whether repeating a failed tool call is safe, because an exception can come after the effect. Advice to retry should therefore not be part of a default message that applies to every tool. Leaving it out stops the SDK from asserting something it cannot know.",
+    "fixChange": "Remove the retry sentence from the default tool error message, so that it only reports that an error occurred while running the tool.",
+    "note": "Fixed upstream: openai/openai-agents-python change #5632"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5469",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5644",
+    "title": "Streamed runs still send a model request when a parallel input guardrail has tripped first",
+    "summary": "A parallel input guardrail may reach its verdict while the streamed runner is still assembling the request, for example resolving instructions, running a start hook or writing to a session. If the verdict is a trip, the non-streamed runner skips the model call. The streamed runner does not: it opens the model stream, sends the whole request, and raises only when the response has come back. The caller pays for rejected input, and hooks and conversation writes still happen.",
+    "expected": "No model request is made once the guardrail's verdict is known.",
+    "actual": "The request is sent anyway and the exception arrives afterwards.",
+    "tags": [
+      "validation",
+      "streaming"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "Before tool side effects the streamed runner already checked whether a guardrail had tripped, but the same check was missing right before the model request. Reading the recorded verdict immediately before each model stream opens, retries included, closes the gap and leaves guardrails that are still pending free to run in parallel.",
+    "fixChange": "Check the recorded guardrail verdict immediately before opening each model stream in streamed runs, retries included, skip the attempt when the guardrail has tripped, and keep errors raised inside a model flowing to the configured retry policy.",
+    "note": "Fixed upstream: openai/openai-agents-python change #5644"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5409",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5424",
+    "title": "An approved tool can run again if the process stops before the new run state is saved",
+    "summary": "After a person approves a pending tool call, the run executes the tool and the application is expected to store the updated run state. If the process dies after the tool's external action but before that state is stored, resuming from the older saved state runs the approved tool a second time, so a payment can be made twice. The saved state cannot know that the tool already ran.",
+    "expected": "Resuming after a crash does not repeat an external action, or the guide states clearly that it can.",
+    "actual": "The approved tool executed again in every trial, with nothing in the guide warning about it.",
+    "tags": [
+      "human-in-the-loop",
+      "retries"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "The state is saved after the action, so it cannot show that the action already happened, and execution is at least once. The guarantee has to come from the destination: stable keys for the logical action, enforced by the system receiving the call, make a repeat harmless. Where that is impossible, the application must reconcile with the authoritative record before retrying, since a missing lookup result does not prove that the action never ran.",
+    "fixChange": "Document in the human-in-the-loop guide that an approved tool can execute again after a crash between the external action and the state save, and recommend destination-enforced idempotency keys or reconciliation before any retry. This is a documentation change with no runtime behaviour change.",
+    "note": "Fixed upstream (documentation): openai/openai-agents-python change #5424"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5386",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5422",
+    "title": "A streamed run keeps calling the model after its only consumer stops handling events",
+    "summary": "When the only consumer of a streamed run's events stops while handling an event, because it raised or was cancelled or timed out while forwarding the event, the run keeps going in the background. It continues to call the model and tools with nobody reading, and every further model call is still billed. Only a cancellation during the wait for the next event stops the run.",
+    "expected": "A consumer that gives up can stop the run it was reading.",
+    "actual": "The run continues unobserved after the consumer exits.",
+    "tags": [
+      "streaming",
+      "cost"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "The consumer and the run have separate lifetimes, and the SDK cancels the run only when the consumer is cancelled while waiting for the next event. A consumer that exits at any other point has to cancel the run itself and wait for cleanup. When cancellation has already closed the original iterator, cleanup needs a fresh one.",
+    "fixChange": "Document the separate lifetimes of consumer and run, with an example in which one owning consumer cancels the run and awaits cleanup on early exit, including cleanup with a new iterator and the limits around repeated cancellation, cleanup errors, cooperative tools and completed side effects. No runtime or API change.",
+    "note": "Fixed upstream (documentation): openai/openai-agents-python change #5422"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5392",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5418",
+    "title": "Invalid handoff arguments end the whole run while bad tool arguments go back to the model",
+    "summary": "If the model supplies invalid arguments to a function tool, the SDK sends the validation error back as the tool's output and the run goes on. If it supplies invalid arguments to a handoff, the handoff raises and the whole run ends. Not every provider enforces a strict schema while decoding, so a forbidden value can still arrive, and the user's turn then fails with a raw error.",
+    "expected": "The model is told that its handoff arguments were invalid and can correct them.",
+    "actual": "A model behaviour exception ends the run.",
+    "tags": [
+      "handoff",
+      "validation"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "Tool calls had an error function that turns a failure into output for the model, but handoffs had no equivalent, so validation failures could only propagate as exceptions. Giving handoffs the same opt-in hook lets the calling agent receive feedback and retry, and leaving it unset keeps the old behaviour.",
+    "fixChange": "Add an opt-in failure error function to handoffs so that invalid arguments are returned to the calling agent as feedback it can correct and retry, with None preserving the exception behaviour. Support sync and async handlers in normal and streamed runs, and keep handled failures on the caller without running transfer hooks or history filters.",
+    "note": "Fixed upstream: openai/openai-agents-python change #5418"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5382",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5421",
+    "title": "Runs with many tool-calling turns slow down quadratically",
+    "summary": "On every turn the runner recomputes a canonical identity for every completed tool call in the history, including dumping the model and hashing the arguments, although only call IDs that can collide matter. The per-turn cost grows with the history, so total run time grows with the square of the number of turns. In a 300-turn test run a large share of the time went into this step.",
+    "expected": "Per-turn planning cost stays roughly constant for unique tool calls.",
+    "actual": "Total time grows quadratically with the number of turns.",
+    "tags": [
+      "loops",
+      "cost"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "Fingerprints are only needed to detect call IDs reused in the history or colliding with the current response. Computing them for every item on every turn was wasted work. Limiting the work to IDs that can collide, and skipping items whose type rules them out, keeps duplicate-ID errors and outputs the same.",
+    "fixChange": "Fingerprint the history only when call IDs repeat in it or collide with the current response, reuse the canonical identity mappings, and skip unneeded reconstruction of legacy approval items, leaving errors, replay suppression and outputs unchanged in streamed and non-streamed runs.",
+    "note": "Fixed upstream: openai/openai-agents-python change #5421"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5327",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5332",
+    "title": "A finished tool call is dropped from history when a parallel tool's guardrail trips",
+    "summary": "If several tool calls run in parallel and one of them aborts the run with an exception, such as a tool input guardrail tripping, a call that had already finished is missing from the session history. On the next turn the model repeats the finished action; in the reported test it created a duplicate ticket in every one of ten trials.",
+    "expected": "Accepted call and output pairs are kept, and the run still reports the failure.",
+    "actual": "Only the user message is stored, so the finished action is repeated on the next turn.",
+    "tags": [
+      "concurrency",
+      "state"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "When the batch of tool calls raised, the outputs of calls that had already completed were never written, so the history contradicted what had really happened. Recording those outputs before the error is re-raised, together with the reasoning they depend on, keeps the history faithful while rejected input and output stay unpublished.",
+    "fixChange": "When one tool in a turn fails, keep the accepted call and output pairs, the required reasoning and the replay ancestry in the session history, together with error details and streamed results. The failure is still reported by the run, and rejected input or output is never published.",
+    "note": "Fixed upstream: openai/openai-agents-python change #5332"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5593",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5633",
+    "title": "Approving a nested agent-as-tool call through its tool context silently loses the decision",
+    "summary": "When an agent exposed as a tool pauses for approval, an application can approve the surfaced interruption through the tool context of the delegation. The decision was recorded on a temporary copy of the run state that nothing kept, so resuming the parent run showed the same interruption again and the approved tool never ran. Approving through the run state itself worked.",
+    "expected": "A decision made through the delegation's tool context applies to the owning run.",
+    "actual": "The approval or rejection is lost without an error.",
+    "tags": [
+      "human-in-the-loop",
+      "state"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "An earlier change made every conversion of a result into a run state build an independent deep copy, so the routing code that took the nested context from such a state wrote the decision into a throwaway copy. The decision has to be applied to the run that owns the pending call, and the checkpoint used to resume it has to be kept.",
+    "fixChange": "Apply a decision made through the delegation's tool context to the owning run and keep the checkpoint used to resume it, with the run-state matcher telling calls from different agents apart even when their IDs and arguments match.",
+    "note": "Fixed upstream: openai/openai-agents-python change #5633"
+  },
+  {
+    "repository": "microsoft/semantic-kernel",
+    "issueUrl": "https://github.com/microsoft/semantic-kernel/issues/14527",
+    "fixUrl": "https://github.com/microsoft/semantic-kernel/pull/14528",
+    "title": "Class constants appear as required fields in generated tool schemas",
+    "summary": "The schema builder includes class variable annotations when it describes a model, so a class constant becomes a required object-valued property. Pydantic leaves such constants out of its fields and of serialized data, therefore the generated schema rejects a perfectly valid payload. The wrong schema also reaches function-call tool definitions and structured output schemas.",
+    "expected": "Only instance fields appear in the schema.",
+    "actual": "A constant shows up as a required property that a valid payload does not contain.",
+    "tags": [
+      "schema",
+      "validation"
+    ],
+    "framework": "Semantic Kernel",
+    "language": "Python",
+    "fixReasoning": "The builder derived the properties from the type hints, and those include annotations marked as class variables. Pydantic excludes them from model fields, so the schema and the model disagreed. Skipping class-variable hints before the property and required loop makes them agree for the parameterized form, the bare form and inherited ones.",
+    "fixChange": "Skip class variable annotations in the model schema builder, covering the parameterized and bare forms and inherited class variables, for Pydantic-based models, plain annotated classes and instances alike.",
+    "note": "Fixed upstream: microsoft/semantic-kernel change #14528"
+  },
+  {
+    "repository": "microsoft/semantic-kernel",
+    "issueUrl": "https://github.com/microsoft/semantic-kernel/issues/14685",
+    "fixUrl": "https://github.com/microsoft/semantic-kernel/pull/14686",
+    "title": "An empty tool result becomes the text None after the prompt round trip",
+    "summary": "A tool message with an empty result is kept as an empty string, but after the history is rendered to a prompt and parsed back, which happens on every chat completion made through prompt functions, the result becomes None and is then sent to the model as the literal word None.",
+    "expected": "An empty tool result stays empty through the round trip.",
+    "actual": "The model receives the text None as the tool's output.",
+    "tags": [
+      "serialization",
+      "parsing"
+    ],
+    "framework": "Semantic Kernel",
+    "language": "Python",
+    "fixReasoning": "An empty result is rendered as a self-closing element, and parsing it back reads the element's text, which is missing rather than empty. The later conversion to text turned that missing value into the string None. Mapping a missing text to an empty string at parse time preserves the original value.",
+    "fixChange": "Map a missing element text to an empty string when parsing a function result from the prompt format, leave non-empty results unchanged, and add tests for the element round trip and for the full prompt round trip.",
+    "note": "Fixed upstream: microsoft/semantic-kernel change #14686"
+  },
+  {
+    "repository": "microsoft/semantic-kernel",
+    "issueUrl": "https://github.com/microsoft/semantic-kernel/issues/14614",
+    "fixUrl": "https://github.com/microsoft/semantic-kernel/pull/14623",
+    "title": "Streaming parallel tool calls from Ollama collapse into a single call",
+    "summary": "Ollama delivers every tool call whole in a chunk of its own, carrying neither an id nor an index. When the chunks are combined, tool calls without an index are merged into the first one, so only the first function name survives and the arguments of all the calls are merged into it. Automatic function invocation then runs one wrong call.",
+    "expected": "Each streamed tool call stays a separate call with its own arguments.",
+    "actual": "Only the first function runs, with the combined arguments.",
+    "tags": [
+      "tool-calling",
+      "streaming"
+    ],
+    "framework": "Semantic Kernel with Ollama",
+    "language": "Python",
+    "fixReasoning": "The merge logic keeps calls apart only when their ids or indexes differ, and the Ollama connector set neither, so every call looked identical. Assigning a running index across the streamed chunks gives each call a distinct identity.",
+    "fixChange": "Keep a running tool call index across streamed chunks in the Ollama connector and pass it to the parsers so that each call gets a sequential index, and add tests for both mapping chunks and response chunks.",
+    "note": "Fixed upstream: microsoft/semantic-kernel change #14623"
+  },
+  {
+    "repository": "microsoft/semantic-kernel",
+    "issueUrl": "https://github.com/microsoft/semantic-kernel/issues/14615",
+    "fixUrl": "https://github.com/microsoft/semantic-kernel/pull/14625",
+    "title": "Several tool formatters ignore the flag that hides a parameter from the model",
+    "summary": "A parameter flagged to stay out of the function choices is hidden by the OpenAI formatters. Five other formatters, covering Anthropic, Bedrock, the Bedrock agent, Google AI and Vertex AI, ignore the flag and still send the parameter in the tool schema, so internal or caller-supplied arguments become visible to the model.",
+    "expected": "A hidden parameter is excluded from properties and required fields for every provider.",
+    "actual": "The parameter appears in the tool schema for five of the formatters.",
+    "tags": [
+      "tool-calling",
+      "schema"
+    ],
+    "framework": "Semantic Kernel",
+    "language": "Python",
+    "fixReasoning": "The OpenAI formatters filter parameters on the flag, while the others read the full parameter list without that filter, so behaviour differed by provider. Applying the same filter to both the properties and the required list makes the flag mean the same everywhere.",
+    "fixChange": "Filter parameters by the include flag, in both properties and required fields, in the formatters for Anthropic, Bedrock, Google AI, Vertex AI and the Bedrock agent.",
+    "note": "Fixed upstream: microsoft/semantic-kernel change #14625"
+  },
+  {
+    "repository": "microsoft/semantic-kernel",
+    "issueUrl": "https://github.com/microsoft/semantic-kernel/issues/14511",
+    "fixUrl": "https://github.com/microsoft/semantic-kernel/pull/14514",
+    "title": "Literal parameters are advertised to the model as a bare object with no allowed values",
+    "summary": "The schema builder does not understand Literal types, so a parameter restricted to a few allowed strings is advertised as a plain object without an enum. The model learns neither the real type nor the permitted values. Function parameters, Pydantic fields and Literals nested inside lists or optionals are all affected.",
+    "expected": "The schema lists the allowed values as an enum.",
+    "actual": "The schema shows a bare object type with no enum.",
+    "tags": [
+      "schema",
+      "tool-calling"
+    ],
+    "framework": "Semantic Kernel",
+    "language": "Python",
+    "fixReasoning": "The builder's handling of complex types covered lists, sets, dicts, tuples and unions, but a Literal fell through to a default that maps unknown types to object. Enum classes already had a correct schema shape, and the same shape fits the values of a Literal.",
+    "fixChange": "Handle Literal in the complex type branch by building a type and an enum from its values, converting enum members to their values, adding null for optional literals, and letting lists of literals work through the existing list branch.",
+    "note": "Fixed upstream: microsoft/semantic-kernel change #14514"
+  },
+  {
+    "repository": "microsoft/semantic-kernel",
+    "issueUrl": "https://github.com/microsoft/semantic-kernel/issues/14589",
+    "fixUrl": "https://github.com/microsoft/semantic-kernel/pull/14595",
+    "title": "Default result parsers of kernel function strategies always raise a TypeError",
+    "summary": "The selection and termination strategies for agent groups declare a default result parser that takes no arguments, but both always call it with the function's result. Anyone who does not supply a parser gets a TypeError every time the strategy runs.",
+    "expected": "The defaults accept the function result and give a usable selection or termination decision.",
+    "actual": "A TypeError for a wrong number of arguments.",
+    "tags": [
+      "multi-agent",
+      "type-errors"
+    ],
+    "framework": "Semantic Kernel",
+    "language": "Python",
+    "fixReasoning": "The default factories returned zero-argument lambdas while both strategies call the parser with one value, so the defaults had to take the result. For selection the output is the agent name. For termination a case-insensitive true means stop, rather than always stopping, which would ignore the function's output.",
+    "fixChange": "Change the defaults to accept the result: selection uses the stripped text of the output as the agent name, and termination treats a case-insensitive true as the signal to stop.",
+    "note": "Fixed upstream: microsoft/semantic-kernel change #14595"
+  },
+  {
+    "repository": "deepset-ai/haystack",
+    "issueUrl": "https://github.com/deepset-ai/haystack/issues/13145",
+    "fixUrl": "https://github.com/deepset-ai/haystack/pull/13146",
+    "title": "A catalog tool named like the bootstrap search tool breaks the next agent step",
+    "summary": "When discovery is active, a searchable toolset accepts a catalog tool whose name equals the name of its own bootstrap search tool. Once that tool is found, two tools share one name, and the agent's next tool execution step fails with a duplicate tool names error. Duplicates among catalog tools were checked during warm-up, but the bootstrap tool was not part of that check.",
+    "expected": "The conflict is reported clearly when the toolset is warmed up.",
+    "actual": "An agent run later fails with a duplicate tool names error.",
+    "tags": [
+      "tool-calling",
+      "validation"
+    ],
+    "framework": "Haystack",
+    "language": "Python",
+    "fixReasoning": "The duplicate check covered only the catalog, so the added search tool escaped it, and the clash appeared only after discovery exposed both tools. Checking the name during warm-up, before any initialisation state is set so that a retry cannot bypass the failure, turns a late runtime error into an early and actionable one.",
+    "fixChange": "Reject a catalog tool whose name equals the bootstrap search tool's name during warm-up, with an error that suggests choosing a different search tool name, do the check before state is set, and keep accepting the name for passthrough catalogs that expose no bootstrap tool.",
+    "note": "Fixed upstream: deepset-ai/haystack change #13146"
+  },
+  {
+    "repository": "deepset-ai/haystack",
+    "issueUrl": "https://github.com/deepset-ai/haystack/issues/13472",
+    "fixUrl": "https://github.com/deepset-ai/haystack/pull/13567",
+    "title": "A tool parameter whose name starts with an underscore vanishes from the schema and makes the tool uncallable",
+    "summary": "A parameter whose name starts with an underscore silently disappears from the schema generated when a tool is created from a function, because Pydantic treats such names as private attributes and reports nothing. Should the parameter be required, the model has no way to provide it, and each call assembled from the schema fails with a missing argument error.",
+    "expected": "Either the parameter appears in the schema, or tool creation fails loudly and names the parameter.",
+    "actual": "The tool is created with a schema that cannot produce a valid call.",
+    "tags": [
+      "tool-calling",
+      "schema"
+    ],
+    "framework": "Haystack",
+    "language": "Python",
+    "fixReasoning": "Schemas were built from annotation and default pairs, and Pydantic quietly skips names with a leading underscore. Parameters like that are deliberately kept away from the model, so the real problem is a required one that nothing else supplies. The creation step now refuses it and names the parameter, unless the value is provided from agent state or has a default.",
+    "fixChange": "Keep underscore-prefixed parameters out of the schema, but raise a ValueError naming the parameter when one is required, has no default and is not covered by inputs from state, after the existing skips for state, callable and mapped inputs.",
+    "note": "Fixed upstream: deepset-ai/haystack change #13567"
+  },
+  {
+    "repository": "deepset-ai/haystack",
+    "issueUrl": "https://github.com/deepset-ai/haystack/issues/13487",
+    "fixUrl": "https://github.com/deepset-ai/haystack/pull/13540",
+    "title": "An output the LLM component returns is not declared, so it is dropped and cannot be connected",
+    "summary": "The LLM component returns an exit reason from its run methods but does not declare it among its outputs. Every pipeline run therefore logs a warning about an undeclared output, the value is dropped before it reaches downstream components, and connecting that output to another component raises an error. The Agent component declares the same output.",
+    "expected": "The exit reason is a declared output that can be connected.",
+    "actual": "A warning on every run, a dropped value and a failed connection attempt.",
+    "tags": [
+      "schema",
+      "configuration"
+    ],
+    "framework": "Haystack",
+    "language": "Python",
+    "fixReasoning": "The run methods and the declared output types had drifted apart: the base class returned a key that the subclass's declaration left out. Declaring it, and documenting it in the run docstrings, makes the component's sockets match what it returns, while the step count and the tool call counts remain excluded as before.",
+    "fixChange": "Declare the exit reason as an output of the LLM component next to the messages, the last message and the token usage, document it in the sync and async run methods, and test it for each finish reason.",
+    "note": "Fixed upstream: deepset-ai/haystack change #13540"
+  },
+  {
+    "repository": "deepset-ai/haystack",
+    "issueUrl": "https://github.com/deepset-ai/haystack/issues/13361",
+    "fixUrl": "https://github.com/deepset-ai/haystack/pull/13366",
+    "title": "Only the last reasoning item of a multi-step response survives conversion",
+    "summary": "A Responses API output can hold several reasoning items, for example when the model produces a reasoning step ahead of each of multiple function calls. The converter overwrote the previous item each time, so only the last one reached the chat message, and the earlier ones, with their IDs and encrypted content, were lost. The streaming path merged them into one item instead, which loses their identity too.",
+    "expected": "Every reasoning item keeps its own ID, content and encrypted payload.",
+    "actual": "Earlier items are dropped or merged into one.",
+    "tags": [
+      "model-provider",
+      "state"
+    ],
+    "framework": "Haystack",
+    "language": "Python",
+    "fixReasoning": "Both the non-streaming converter and the streaming assembly treated reasoning as a single slot, one by overwriting and the other by merging. Keeping one reasoning content that carries each provider item separately in its extra data preserves their identity, and recording output indices lets the items and the function calls be replayed in their original relative order.",
+    "fixChange": "Keep a single reasoning content with the individual items in its extra data for streaming and non-streaming responses alike, retain every item's ID, text, encrypted payload and index, replay reasoning and function calls in their original order, and keep supporting previously saved single-item metadata.",
+    "note": "Fixed upstream: deepset-ai/haystack change #13366"
+  },
+  {
+    "repository": "deepset-ai/haystack",
+    "issueUrl": "https://github.com/deepset-ai/haystack/issues/13509",
+    "fixUrl": "https://github.com/deepset-ai/haystack/pull/13510",
+    "title": "Connecting sockets fails when the members of a Union or Literal are listed in another order",
+    "summary": "When both ends of a connection are Union types, the compatibility check compared their members by position, so an optional string connected to a three-way union only when the members happened to be listed in a matching order. Literal types behaved the same way, and so did unions nested in containers, which stopped a list of paths and byte streams from connecting to a text file converter that accepts more types.",
+    "expected": "A union output connects when each of its members fits some member of the input union.",
+    "actual": "The connection fails with a type mismatch error that depends on the order of the members.",
+    "tags": [
+      "type-errors",
+      "validation"
+    ],
+    "framework": "Haystack",
+    "language": "Python",
+    "fixReasoning": "The comparison matched members one to one by position, which is a stricter rule than set inclusion. A union sender is compatible when every member is compatible with the receiving union, a rule the code already had for a sender that is not a union, and a literal sender is compatible when all its values appear in the receiving literal.",
+    "fixChange": "In the strict type compatibility check, treat a union sender as compatible when each member fits the receiving union and a literal sender as compatible when all its values are in the receiving literal, independent of order, and add test cases for these combinations.",
+    "note": "Fixed upstream: deepset-ai/haystack change #13510"
+  },
+  {
+    "repository": "deepset-ai/haystack",
+    "issueUrl": "https://github.com/deepset-ai/haystack/issues/13428",
+    "fixUrl": "https://github.com/deepset-ai/haystack/pull/13430",
+    "title": "Parallel components accept a worker count below one and then behave differently in sync and async runs",
+    "summary": "Several components that do work in parallel accept a worker count of zero or less without complaint when they are created. In the synchronous run the mistake surfaces later as a confusing error from the thread pool, while the asynchronous run silently treats the value as one and succeeds, so the same configuration works in one kind of pipeline and crashes in another.",
+    "expected": "An invalid worker count is rejected at creation with a clear message.",
+    "actual": "A late thread pool error or silent clamping, depending on how the component is run.",
+    "tags": [
+      "configuration",
+      "concurrency"
+    ],
+    "framework": "Haystack",
+    "language": "Python",
+    "fixReasoning": "Nothing validated the value at construction, so each run mode handled it in its own way. Validating in the constructor catches the mistake where it is made, also when a serialized pipeline is loaded since loading goes through the constructor, and the async clamp becomes unnecessary.",
+    "fixChange": "Raise a ValueError in the constructor of each affected component when the worker count is not positive, remove the clamp to one from the async runs, and document the error.",
+    "note": "Fixed upstream: deepset-ai/haystack change #13430"
+  },
+  {
+    "repository": "modelcontextprotocol/python-sdk",
+    "issueUrl": "https://github.com/modelcontextprotocol/python-sdk/issues/3669",
+    "fixUrl": "https://github.com/modelcontextprotocol/python-sdk/pull/3696",
+    "title": "Unknown prompt names and missing prompt arguments return generic error codes instead of invalid params",
+    "summary": "When a client asks a server for a prompt that does not exist, or leaves out a required argument, the specification calls for a JSON-RPC invalid params error. The Python server raised a plain exception instead, so clients saw code zero on one protocol version and an internal error code on the other.",
+    "expected": "Invalid params for both cases on both protocol versions.",
+    "actual": "Code 0 or an internal server error.",
+    "tags": [
+      "protocol",
+      "error-handling"
+    ],
+    "framework": "MCP Python SDK",
+    "language": "Python",
+    "fixReasoning": "The prompt lookup and the argument check raised ValueError, which the server's error mapping treats as an unclassified failure. Raising the protocol's own error type with the invalid params code lets the existing mapping reach the client unchanged, while failures inside a prompt function stay what they were.",
+    "fixChange": "Answer unknown prompts and absent required arguments with the invalid params code under both protocol versions, make direct get_prompt and render calls raise the protocol error type in those cases, keep prompt execution failures as they were, and update tests and documentation.",
+    "note": "Fixed upstream: modelcontextprotocol/python-sdk change #3696"
+  },
+  {
+    "repository": "modelcontextprotocol/python-sdk",
+    "issueUrl": "https://github.com/modelcontextprotocol/python-sdk/issues/3353",
+    "fixUrl": "https://github.com/modelcontextprotocol/python-sdk/pull/3354",
+    "title": "Boolean sub-schemas in tool properties make clients discard the whole tool list",
+    "summary": "JSON Schema lets a boolean stand in for a sub-schema anywhere one is expected, even as an entry under properties. The generated wire models for the 2025-11-25 protocol version typed every such entry as an object, so a tool advertising a boolean property schema failed validation. Because the listing result is validated as a whole, the client discarded every tool of that server, and a public server returned such schemas for most of its tools.",
+    "expected": "Boolean sub-schemas are accepted and the tool list is kept.",
+    "actual": "Validation fails and no tools are listed.",
+    "tags": [
+      "schema",
+      "protocol"
+    ],
+    "framework": "MCP Python SDK",
+    "language": "Python",
+    "fixReasoning": "The strict typing came from how the generated models were rendered from the protocol's schema, not from the specification text, and the newer protocol version already accepts free-form schemas. Widening the accepted value type under properties to an object or a boolean matches JSON Schema without loosening anything else.",
+    "fixChange": "Widen the type of the values under properties in the input and output schema models of the 2025-11-25 version so they accept objects or booleans, by adding two patches to the generator's list for that version and regenerating the models.",
+    "note": "Fixed upstream: modelcontextprotocol/python-sdk change #3354"
+  },
+  {
+    "repository": "modelcontextprotocol/python-sdk",
+    "issueUrl": "https://github.com/modelcontextprotocol/python-sdk/issues/3345",
+    "fixUrl": "https://github.com/modelcontextprotocol/python-sdk/pull/3621",
+    "title": "An explicit null structured result skips output schema validation",
+    "summary": "A client treated a tool result whose structured content was an explicit null the same as a result that left the field out. When a tool declared an output schema, such a result was rejected with a message that no structured content was returned, and the schema was never checked, although null is a legal structured value in the newer specification.",
+    "expected": "An explicit null is validated against the output schema like any other value.",
+    "actual": "The client reports missing structured content and never runs the schema check.",
+    "tags": [
+      "validation",
+      "protocol"
+    ],
+    "framework": "MCP Python SDK",
+    "language": "Python",
+    "fixReasoning": "Python's model stores both an omitted field and a null as None, so the check could not tell them apart, although the set of fields that were actually present can. Only a truly absent field should count as missing, and the values zero, false and the empty string were already validated.",
+    "fixChange": "Treat structured content as missing only when the field was omitted, and validate an explicit null against the output schema, which matches the behaviour of the TypeScript SDK.",
+    "note": "Fixed upstream: modelcontextprotocol/python-sdk change #3621"
+  },
+  {
+    "repository": "modelcontextprotocol/python-sdk",
+    "issueUrl": "https://github.com/modelcontextprotocol/python-sdk/issues/3745",
+    "fixUrl": "https://github.com/modelcontextprotocol/python-sdk/pull/3756",
+    "title": "Typing Dict return annotations get a wrapped output while the built-in dict does not",
+    "summary": "A tool declared to return the typing module's Dict of strings to some type, and one declared with the built-in dict form, are the same type, yet the server gave them different output schemas and structured content. The older spelling was wrapped under a result key, so automatically modernising annotations silently changed a tool's wire output, and a client that had cached the earlier schema then rejected its results.",
+    "expected": "Both spellings produce the same schema and the same structured content.",
+    "actual": "Only the typing spelling is wrapped under a result key.",
+    "tags": [
+      "structured-output",
+      "schema"
+    ],
+    "framework": "MCP Python SDK",
+    "language": "Python",
+    "fixReasoning": "Generic return types were recognised with a check that matches only the built-in generic alias class, so the typing module's own alias class fell into the catch-all branch that wraps the value. Testing for a generic origin instead recognises both forms.",
+    "fixChange": "Detect generic return annotations by whether they have an origin rather than by alias class, so that typing Dict annotations get the same schema and structured content as dict annotations, and add test cases for the typing spelling and for a NewType, which now reaches the catch-all branch.",
+    "note": "Fixed upstream: modelcontextprotocol/python-sdk change #3756"
+  },
+  {
+    "repository": "modelcontextprotocol/python-sdk",
+    "issueUrl": "https://github.com/modelcontextprotocol/python-sdk/issues/3473",
+    "fixUrl": "https://github.com/modelcontextprotocol/python-sdk/pull/3628",
+    "title": "Every request carries an empty metadata object that strict servers reject",
+    "summary": "On connections that use the initialize handshake, the client added an empty meta object to the params of every request it sent, including initialize, even when nothing had been put in it. An empty meta is allowed by the specification, but some servers reject it with a bad request error, which made them unreachable from the new client. Requests that had no params of their own were sent with params holding only the empty object.",
+    "expected": "Meta and params are sent only when they have content.",
+    "actual": "Every request ships an empty meta object.",
+    "tags": [
+      "protocol",
+      "configuration"
+    ],
+    "framework": "MCP Python SDK",
+    "language": "Python",
+    "fixReasoning": "The dispatcher attached the meta dictionary to the params before trace context was added to it, so it went out even in the default case of no tracing, no progress callback and no caller-supplied meta. Deciding whether to include it only after everything that might fill it has run restores the wire format of the older client.",
+    "fixChange": "Send the meta member only when it has content and omit the params member when a request has none left, which restores the previous wire format for requests such as ping and tools list.",
+    "note": "Fixed upstream: modelcontextprotocol/python-sdk change #3628"
+  },
+  {
+    "repository": "pydantic/pydantic-ai",
+    "issueUrl": "https://github.com/pydantic/pydantic-ai/issues/12690",
+    "fixUrl": "https://github.com/pydantic/pydantic-ai/pull/12698",
+    "title": "A code mode tool named after a built-in function never runs",
+    "summary": "In code mode, a tool named like one of the sandbox interpreter's built-ins appears in the catalog and passes the type check, yet the interpreter looks up built-ins first and only then asks the host, so the built-in answers the call. Sequential tools fail silently and return made-up data, while other tools fail with confusing type errors that never point at the name clash.",
+    "expected": "Either the tool is called, or setup refuses the configuration and points at the clashing name.",
+    "actual": "The built-in runs instead, with empty or invented results or an unrelated TypeError.",
+    "tags": [
+      "sandbox",
+      "tool-calling"
+    ],
+    "framework": "Pydantic AI",
+    "language": "Python",
+    "fixReasoning": "Name resolution inside the sandbox prefers built-ins, so no catalog entry can win against them. Since the clash cannot be resolved at run time, the safe place to handle it is setup, where an error can name the tool. Checking against the full list of the host language's built-ins also means that a built-in added to the sandbox later cannot take over a tool that works today.",
+    "fixChange": "Raise a user error at setup when a sandboxed code mode tool has a name that is a Python built-in, next to the existing check for the reserved run_code name, and document the migration: rename the tool, or use prefixing or renaming on its toolset.",
+    "note": "Fixed upstream: pydantic/pydantic-ai change #12698"
+  },
+  {
+    "repository": "pydantic/pydantic-ai",
+    "issueUrl": "https://github.com/pydantic/pydantic-ai/issues/12668",
+    "fixUrl": "https://github.com/pydantic/pydantic-ai/pull/12669",
+    "title": "Code mode shows the model parameter names that are not valid Python",
+    "summary": "Code mode writes JSON schema property names as they are into the function catalog the model sees and into the stubs that the sandbox type-checks. A name that is a keyword, such as from, or is not an identifier, such as one containing a hyphen, dollar sign, at sign or bracket, yields a signature that is a syntax error, so the model gets a function it cannot call and the stubs fail to type-check. Tools derived from MCP and OpenAPI often have such names.",
+    "expected": "Every parameter and field is rendered under a valid identifier and mapped back to its schema name when the tool is called.",
+    "actual": "The catalog and the stubs contain signatures with syntax errors.",
+    "tags": [
+      "schema",
+      "sandbox"
+    ],
+    "framework": "Pydantic AI",
+    "language": "Python",
+    "fixReasoning": "Tool names were already sanitised, but parameter and field names went through untouched. Each parameter has to render under a safe identifier while the key that maps back to the schema property is kept, and a typed dictionary with an awkward field needs the functional syntax because the class syntax cannot express it.",
+    "fixChange": "Render keyword and non-identifier parameter and field names as valid Python identifiers in both code mode variants, keep the schema property name as the key used for dispatch, and render typed dictionaries that have such fields in the functional syntax.",
+    "note": "Fixed upstream: pydantic/pydantic-ai change #12669"
+  },
+  {
+    "repository": "pydantic/pydantic-ai",
+    "issueUrl": "https://github.com/pydantic/pydantic-ai/issues/12094",
+    "fixUrl": "https://github.com/pydantic/pydantic-ai/pull/12654",
+    "title": "DeepSeek strict tool definitions are enforced only on its beta endpoint, but the profile enables them everywhere",
+    "summary": "The DeepSeek provider enables strict tool definitions for every base URL, so compatible tools are sent with the strict flag. The vendor documents strict mode only for its beta endpoint: on the default URL the flag is accepted without being enforced, and on the beta endpoint a strict schema with an optional property is rejected.",
+    "expected": "Users know where strict mode is actually enforced and how to point the provider at the beta URL.",
+    "actual": "Strict appears to work everywhere, but only the beta endpoint validates it.",
+    "tags": [
+      "model-provider",
+      "schema"
+    ],
+    "framework": "Pydantic AI",
+    "language": "Python",
+    "fixReasoning": "A live check showed that the default endpoint answers successfully whether or not the schema is strict-compatible, while the beta endpoint returns an error for an incompatible one. Because the behaviour depends on the endpoint rather than on the library, the resolution was to state it in the documentation and show how to select the beta URL through a custom client.",
+    "fixChange": "Add a note to the DeepSeek model documentation that strict tool definitions are enforced only on the beta base URL, and show how to configure the provider with a client that targets that URL, since the provider has no base URL argument. No code change.",
+    "note": "Fixed upstream (documentation): pydantic/pydantic-ai change #12654"
+  },
+  {
+    "repository": "pydantic/pydantic-ai",
+    "issueUrl": "https://github.com/pydantic/pydantic-ai/issues/12574",
+    "fixUrl": "https://github.com/pydantic/pydantic-ai/pull/12575",
+    "title": "Edits to an OpenAI response without a history digest are ignored when chaining with a previous response id",
+    "summary": "With automatic previous response chaining, a response that has no recorded history digest is trusted and continued from, which covers any response created without the setting. An edit to that response, or to the history before it, never reaches the model, because the server continues from its stored copy.",
+    "expected": "An edited history is sent in full so that the model sees the edit.",
+    "actual": "The request chains from the old stored response and the edit has no effect.",
+    "tags": [
+      "state",
+      "context-window"
+    ],
+    "framework": "Pydantic AI with OpenAI",
+    "language": "Python",
+    "fixReasoning": "The absence of a digest was read as a sign of trust, when it really means that nothing was recorded to verify the history against. Treating it like a changed history sends the full history once, which also records a digest so that the following requests can chain again, at the price of one larger upload.",
+    "fixChange": "Stop continuing from an OpenAI response that has no history digest: send the full history, which records a digest, and let the next request chain again, including when a concrete seed id is given, since a chain boundary already overrides it.",
+    "note": "Fixed upstream: pydantic/pydantic-ai change #12575"
+  },
+  {
+    "repository": "pydantic/pydantic-ai",
+    "issueUrl": "https://github.com/pydantic/pydantic-ai/issues/12560",
+    "fixUrl": "https://github.com/pydantic/pydantic-ai/pull/12561",
+    "title": "Clamping oversized messages has no effect on stored OpenAI responses",
+    "summary": "Two history processors, one clamping oversized messages and one clearing tool inputs, edit a response part but leave its item ID in place. When an item comes back under an ID the server has stored, the server prefers its stored copy and ignores the content sent, so the next request still carries the oversized response and can overflow the context. The measured token counts were identical with and without the clamp.",
+    "expected": "The edited content reaches the model, so the context shrinks.",
+    "actual": "The model still sees the full original text, with no clamp marker.",
+    "tags": [
+      "context-window",
+      "state"
+    ],
+    "framework": "Pydantic AI with OpenAI",
+    "language": "Python",
+    "fixReasoning": "The edit is invisible to the server as long as the item keeps the identity under which the full text was stored. Dropping the ID of an edited part makes the server read what is sent. Live checks showed that neighbouring reasoning items and the phase field stay valid when the ID is dropped.",
+    "fixChange": "Make the clamping processor and the tool-result clearing processor drop the item ID of the part they edit, so that the Responses API uses the content that is sent instead of its stored copy.",
+    "note": "Fixed upstream: pydantic/pydantic-ai change #12561"
+  },
+  {
+    "repository": "pydantic/pydantic-ai",
+    "issueUrl": "https://github.com/pydantic/pydantic-ai/issues/11943",
+    "fixUrl": "https://github.com/pydantic/pydantic-ai/pull/12188",
+    "title": "A flow retry repeats a model request when the history holds non-UTF-8 binary content",
+    "summary": "On a retry of a workflow flow, a model request whose message history contains binary content that is not valid UTF-8, an image for instance, is executed once more rather than replayed from its recorded result, while text-only history replays correctly. The cache key comes from a hashing step that falls back to pickling for such bytes, and a pickle digest depends on how objects are shared, which differs once results are reloaded from storage.",
+    "expected": "Completed requests are replayed from the result store on retry.",
+    "actual": "The request and any dependent tool calls run again.",
+    "tags": [
+      "retries",
+      "state"
+    ],
+    "framework": "Pydantic AI with Prefect",
+    "language": "Python",
+    "fixReasoning": "Binary values that cannot be encoded as text sent the key computation down a path whose result depends on object identity as well as content, so a reloaded response changed the key. Hashing such values by their content makes the key stable, and the same projection also serves the default run IDs.",
+    "fixChange": "Hash non-UTF-8 binary values by content in the shared input projection used for cache keys and default run IDs, so that replayed responses keep their keys and completed requests and tools are not repeated on retry.",
+    "note": "Fixed upstream: pydantic/pydantic-ai change #12188"
+  },
+  {
+    "repository": "microsoft/semantic-kernel",
+    "issueUrl": "https://github.com/microsoft/semantic-kernel/issues/14441",
+    "fixUrl": "https://github.com/microsoft/semantic-kernel/pull/14496",
+    "title": "A kernel function decorator strips the parameter description from a shared metadata dictionary",
+    "summary": "When the decorator reads the description from a dictionary placed inside an Annotated type, it pops the key out of the caller's own dictionary. If one metadata dictionary is shared by several functions, every function after the first silently loses its parameter description, and the caller's dictionary is left empty.",
+    "expected": "Decoration never changes caller-owned metadata, and every function sees the description.",
+    "actual": "The first function keeps the description, the others lose it, and the dictionary ends up empty.",
+    "tags": [
+      "state",
+      "schema"
+    ],
+    "framework": "Semantic Kernel",
+    "language": "Python",
+    "fixReasoning": "The parser extracted the description with a destructive pop on the object the caller handed in, so the first use consumed shared state. Working on a copy leaves the caller's dictionary intact and lets repeated use behave the same.",
+    "fixChange": "Copy dictionary metadata from the annotation before extracting the description, so that caller-owned metadata is preserved when the same annotation is reused, and add a regression test with repeated decorated functions.",
+    "note": "Fixed upstream: microsoft/semantic-kernel change #14496"
+  },
+  {
+    "repository": "langchain-ai/langgraph",
+    "issueUrl": "https://github.com/langchain-ai/langgraph/issues/9090",
+    "fixUrl": "https://github.com/langchain-ai/langgraph/pull/9486",
+    "title": "A node's trace policy rewrites what streaming modes and event streams report",
+    "summary": "A node's trace policy was meant for tracers only, yet every callback handler attached to that node's run received the processed payload. With a policy that omits outputs, messages the node returned never reached the messages stream mode. With one that omits inputs, messages passed through were emitted again because deduplication never saw them, and the event stream reported the node's input and output as empty.",
+    "expected": "Only tracers receive the processed payload, and other handlers get the real one.",
+    "actual": "Streamed messages disappear or repeat, and events show empty payloads.",
+    "tags": [
+      "tracing",
+      "streaming"
+    ],
+    "framework": "LangGraph",
+    "language": "Python",
+    "fixReasoning": "The sequence runner handed the already processed input and output to the start and end callbacks that every handler receives, so the stream handlers saw redacted data. When a policy changes the payload, the start and end events have to be sent twice with the same run id: once to the tracers with the processed payload, and once to every other handler with the original.",
+    "fixChange": "Pass the whole trace policy to the sequence runner instead of separate trace flags, and when the policy changes a payload dispatch the run's start and end events twice under one run id, with tracers receiving the processed payload and all other handlers the original.",
+    "note": "Fixed upstream: langchain-ai/langgraph change #9486"
+  },
+  {
+    "repository": "crewAIInc/crewAI",
+    "issueUrl": "https://github.com/crewAIInc/crewAI/issues/9052",
+    "fixUrl": "https://github.com/crewAIInc/crewAI/pull/9057",
+    "title": "A search tool fails every call that asks for a sourced answer",
+    "summary": "A web search tool offers three output types, but it always reads a results list from the response. For the sourced answer type the SDK returns an object with an answer and its sources, and for the structured type a plain mapping, so reading the results attribute raises inside the tool, which then reports a failure on every call except those using the default type.",
+    "expected": "Each output type is handled according to the shape of its response.",
+    "actual": "The tool answers with a failure saying that the object has no results attribute.",
+    "tags": [
+      "tool-calling",
+      "type-errors"
+    ],
+    "framework": "CrewAI Tools",
+    "language": "Python",
+    "fixReasoning": "The code assumed one response shape for all output types. Choosing the handling by the requested output type, and returning the answer and its sources for the sourced answer type, matches what the SDK actually returns.",
+    "fixChange": "Branch on the requested output type in the tool's run method, so that sourced answers return their answer and sources and the other output types keep working.",
+    "note": "Fixed upstream: crewAIInc/crewAI change #9057"
+  }
+]

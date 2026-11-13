@@ -91,7 +91,13 @@ async function main(): Promise<void> {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((error: unknown) => {
-    console.error(error instanceof Error && error.message.startsWith("Usage") ? error.message : "import failed");
+    // The message is not printed (a database error can quote what it was writing); the class and the SQLSTATE or network code say enough.
+    const code = (error as { code?: unknown; cause?: { code?: unknown } } | null)?.code ?? (error as { cause?: { code?: unknown } } | null)?.cause?.code;
+    console.error(
+      error instanceof Error && error.message.startsWith("Usage")
+        ? error.message
+        : `import failed (${error instanceof Error ? error.constructor.name : "unknown"}${typeof code === "string" ? `, ${code}` : ""})`,
+    );
     process.exitCode = 1;
   });
 }
