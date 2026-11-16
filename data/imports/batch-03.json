@@ -1,0 +1,902 @@
+[
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5567",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5634",
+    "title": "A tripwire exception can omit the result of a sibling input guardrail that had already finished",
+    "summary": "The documentation says the exception raised for an input tripwire lists every input guardrail result completed before the run stopped. When the tripping result was consumed first, a sibling guardrail that had already completed successfully could be missing from that list, although the tripwire itself was raised correctly.",
+    "expected": "The exception reports every guardrail result completed before the stop, including the one that tripped.",
+    "actual": "A completed sibling result is absent from the exception's run data.",
+    "tags": [
+      "validation",
+      "concurrency"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "The runners recorded results as they were consumed, so whichever finished checking first decided what the exception contained. Collecting the results that were already complete at the moment of the trip keeps the first consumed tripwire as the reported cause while making the list match what the documentation promises.",
+    "fixChange": "Include the input guardrail results that are already complete in the rejection details when a tripwire fires, in both the streamed and non-streamed runners, keep the first consumed tripwire as the cause, and exclude checks that finish only during cancellation.",
+    "note": "Fixed upstream: openai/openai-agents-python change #5634"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5592",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5628",
+    "title": "Resuming a saved approval checkpoint fails on a Chat Completions model when the history holds a plain assistant message",
+    "summary": "A run whose input contains an ordinary assistant message pauses for a tool approval. The checkpoint is saved and restored through its string form, which stores the text as one output text part. Once the approved tool has run, the Chat Completions converter refuses that representation, so the resumed run fails with a user error before the next model request.",
+    "expected": "Restoring the checkpoint gives the same behaviour as resuming in memory.",
+    "actual": "A UserError stops the resumed run.",
+    "tags": [
+      "state",
+      "human-in-the-loop"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "Serialization changed the shape of the message in a way that the converter had never been taught to read. Teaching the converter to treat the saved text as a standalone assistant message keeps the message boundaries around later tool calls the same as for an in-memory resume, and it also helps checkpoints that were saved earlier.",
+    "fixChange": "Make the Chat Completions converter read the saved single output text part as a standalone assistant message, so that a run resumed from an approval checkpoint keeps the same message boundaries as an in-memory resume.",
+    "note": "Fixed upstream: openai/openai-agents-python change #5628"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5348",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5423",
+    "title": "An empty shell result is turned into invented output and a fabricated success",
+    "summary": "When a shell tool executor returns a structured result with an empty output list, which is the legitimate result of a command that succeeded and printed nothing, the SDK invents standard output for it. The next model turn and the stored raw item receive the human-readable placeholder no output as if it were stdout, together with an exit code of zero that the executor never reported.",
+    "expected": "An empty structured result stays empty.",
+    "actual": "A placeholder appears as stdout, with an invented exit code and success outcome.",
+    "tags": [
+      "tool-calling",
+      "state"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "The placeholder is meant for displaying an empty output to a person, but the conversion code used it as data. Data given to the model and persisted must reflect only what the executor reported, so an empty list has to remain an empty list while display rendering keeps its placeholder.",
+    "fixChange": "Preserve an empty structured shell result as empty instead of wrapping the display placeholder as stdout and inventing an exit code, leave display rendering and executors that return strings as they were, and add runner-level tests for ordinary and streamed runs.",
+    "note": "Fixed upstream: openai/openai-agents-python change #5423"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5340",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5363",
+    "title": "Automatic compaction runs during a pending tool approval and leaves an orphaned output",
+    "summary": "With the compaction session, automatic compaction runs just after a turn that ends in a tool approval. That turn stored a function call without any output yet, so the pending call is sent to the compaction endpoint and swapped for the compaction item. When the approval arrives, the resumed run adds the call's output, which now points at a call that no longer exists, and the compaction request itself can fail with an HTTP 400 error.",
+    "expected": "Compaction waits until the pending call has its output.",
+    "actual": "The unresolved call is compacted away and its later output is orphaned.",
+    "tags": [
+      "state",
+      "human-in-the-loop"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "An integrity check for tool groups already existed for partial snapshots, but complete automatic histories bypassed it. Applying the same check to them defers compaction while any call is unresolved, including hosted MCP approval requests that are matched by their existing request ids, and lets it proceed once the call and its output are both present.",
+    "fixChange": "Run the existing tool group integrity check on complete automatic histories too, not only on partial snapshots, check hosted MCP approval requests and responses by their request ids, keep pending calls available for approval or rejection, and compact once the output exists.",
+    "note": "Fixed upstream: openai/openai-agents-python change #5363"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5339",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5366",
+    "title": "Input added to a paused run is silently dropped when a completed tool ends the run on resume",
+    "summary": "One model response can contain a tool listed to stop the run, which needs no approval, next to a sibling call that does. The stop tool runs and the turn is interrupted. The run state still takes further input, but once the approval is given the resumed run finishes on what the stop tool returned and never contacts the model again, so the staged input is never delivered and is absent from the input list, with no error or warning.",
+    "expected": "Input that cannot be delivered is rejected when it is added.",
+    "actual": "The input is accepted and then silently lost.",
+    "tags": [
+      "human-in-the-loop",
+      "validation"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "A guard already refused input in other states in which the resumed run would not reach the model, but it did not consider a completed sibling that matches the stop list. Checking the saved response for both bare and qualified function names lets the existing error be raised before the input is staged, and pending handoffs keep their precedence.",
+    "fixChange": "Make the guard of the add input method consider the bare and the qualified names of the function tools in the saved response, so that it raises the existing user error before staging input that a completed stop tool would drop, with pending handoffs and serialized state formats unchanged.",
+    "note": "Fixed upstream: openai/openai-agents-python change #5366"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5298",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5302",
+    "title": "A docstring that starts with an Args section loses all parameter descriptions",
+    "summary": "When a tool function's Google-style docstring has no summary line and consists only of an Args section, every parameter description is dropped and the flattened Args block ends up in the tool description. The documentation says that input descriptions are taken from the docstring. An earlier attempt to fix it was closed because its test did not pass unchanged on the base.",
+    "expected": "Each parameter description is taken from the Args section.",
+    "actual": "All of them are lost and the section is treated as the tool description.",
+    "tags": [
+      "schema",
+      "parsing"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "The docstring has already been cleaned of indentation when it reaches the parser, and the parser cleans the text a second time, which removes the indentation of the parameter lines and makes the section look like a description. A leading newline stops the second cleaning from dedenting the section, so the indentation survives parsing.",
+    "fixChange": "Prefix the docstring with a newline before it is handed to the parser so that parameter indentation survives, and add regression tests for automatic and explicit Google style, wrapped parameter text and the long-standing convention for an empty tool description.",
+    "note": "Fixed upstream: openai/openai-agents-python change #5302"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5239",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5240",
+    "title": "The tool use behavior setting ignores tools that already ran when a run resumes after an approval",
+    "summary": "The setting that controls how tool results are used is checked only against the tools that run after a resume, not against every tool result of the interrupted turn. Take a turn where the model calls two tools at once: one that stops the run and needs no approval, and one that does need it. The first runs before the pause, and after the approval the model is called again, so an action such as submitting an order can happen twice.",
+    "expected": "The behavior is evaluated over every tool result of the turn, in the order of the model's calls.",
+    "actual": "Only the results after the resume are considered.",
+    "tags": [
+      "human-in-the-loop",
+      "tool-calling"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "The resume path built the final output decision from the newly executed results alone, discarding what had already completed in the same turn. Combining the earlier and the resumed results in the original model call order before the decision restores the semantics of an uninterrupted turn, including the first-tool rule and custom callbacks when the gated call comes first.",
+    "fixChange": "Combine the existing function results and the resumed ones in original model call order before evaluating the final output, which preserves the stop on first tool behaviour and custom callbacks when the approval-gated call appears first, with no change to the public API.",
+    "note": "Fixed upstream: openai/openai-agents-python change #5240"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5229",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5238",
+    "title": "A non-streaming Chat Completions run fails when the provider reports a null token count",
+    "summary": "With the Chat Completions model, a non-streaming run fails even though a valid answer came back when the provider's usage data has a null token count. The streaming path already treats such a value as zero, but the non-streaming response passes the counts straight into the usage object, which rejects None. The any-llm model builds its usage the same way.",
+    "expected": "Null token counts are read as zero and the answer is returned.",
+    "actual": "Validation of the usage object fails and the run errors.",
+    "tags": [
+      "type-errors",
+      "model-provider"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "The two paths disagreed about nullable counts: the streaming handler already coerced them and the non-streaming one did not, and OpenAI-compatible providers are free to send nulls. Normalising to zero in both adapters makes them match, while supplied counts, token details and raw usage stay as they were.",
+    "fixChange": "Normalize null prompt, completion and total token counts to zero in the Chat Completions usage conversion of both the OpenAI and the any-llm adapters, matching streaming, and add runner-level tests for each nullable count.",
+    "note": "Fixed upstream: openai/openai-agents-python change #5238"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5171",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5173",
+    "title": "A bad return value from the tool use behavior callback raises an obscure AttributeError",
+    "summary": "If the callback that decides how tool results are used returns something other than the expected result object, such as a bare string, the runner fails with an attribute error saying that a str has no attribute is_final_output. The message does not say what the callback should have returned.",
+    "expected": "A user error states that the callable must return the tool results object.",
+    "actual": "An AttributeError points inside the runner.",
+    "tags": [
+      "validation",
+      "error-handling"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "The runner used the returned value without checking its type, so a mistake in user code surfaced as an internal failure. Validating the value once the callback has been awaited, for both synchronous and asynchronous callbacks, gives a message that names the contract.",
+    "fixChange": "Validate the result of the tool use behavior callback after awaiting it and raise a clear user error stating that it must return the tool results to final output type, in streaming and non-streaming runs, leaving valid callbacks and the built-in policies unchanged.",
+    "note": "Fixed upstream: openai/openai-agents-python change #5173"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5170",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5174",
+    "title": "A tool with keyword arguments is silently called with empty arguments when the model sends them flat",
+    "summary": "A function tool declared with keyword arguments and non-strict mode advertises a schema with a nested object property for them. Models typically send a flat argument object instead, which the wrapper accepts, but the function is then invoked with empty keyword arguments and the payload is silently dropped. The nested form works, and strict mode raises an error that gives no hint about how to proceed.",
+    "expected": "A flat payload is rejected clearly instead of being discarded.",
+    "actual": "The tool runs with no arguments and no error.",
+    "tags": [
+      "tool-calling",
+      "validation"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "Pydantic ignores unexpected top-level keys by default, so a flat payload passed validation and then produced nothing to pass on. Changing the advertised format would break released behaviour, so the safe option is to reject those stray keys before the function is invoked and to make the strict mode message explain the alternatives.",
+    "fixChange": "Reject flat or mixed payloads for non-strict keyword argument tools before invocation and before any side effects, keep the nested format, typed values and empty defaults, and make the strict mode error explain how to use the non-strict nested form or explicit parameters.",
+    "note": "Fixed upstream: openai/openai-agents-python change #5174"
+  },
+  {
+    "repository": "langchain-ai/langgraph",
+    "issueUrl": "https://github.com/langchain-ai/langgraph/issues/9328",
+    "fixUrl": "https://github.com/langchain-ai/langgraph/pull/9628",
+    "title": "The prebuilt react agent builds an unused error message from its whole state on each model call",
+    "summary": "A helper of the prebuilt react agent assembles the text of its missing messages error with an f-string that embeds the whole state, and it does so on every model call, even when no error is raised. That calls repr on the full message history at each step, so a step gets slower as the conversation grows, and a benchmark with a hundred tool calls took more than twice as long.",
+    "expected": "The message is built only when the error is actually raised.",
+    "actual": "The cost of formatting the history is paid on every step.",
+    "tags": [
+      "loops",
+      "cost"
+    ],
+    "framework": "LangGraph",
+    "language": "Python",
+    "fixReasoning": "The string was assembled before the code checked whether it was needed, so a diagnostic that almost never fires cost a full traversal of the history each time. Building it inside the branch that raises keeps the text identical and removes the cost from the normal path.",
+    "fixChange": "Move the construction of the missing messages error text into the branch that raises, so that outputs, streamed chunks and the error message are unchanged while the model call no longer formats the entire message history.",
+    "note": "Fixed upstream: langchain-ai/langgraph change #9628"
+  },
+  {
+    "repository": "langchain-ai/langgraph",
+    "issueUrl": "https://github.com/langchain-ai/langgraph/issues/6970",
+    "fixUrl": "https://github.com/langchain-ai/langgraph/pull/9251",
+    "title": "A checkpoint serializer silently replaces values it cannot rebuild with None",
+    "summary": "If a checkpointed object cannot be rebuilt on load, for example because its module was removed or renamed, or because its constructor now rejects the stored fields, the serializer returns None for it. The value then disappears from the restored state without any error or warning, which can lead to wrong behaviour much later.",
+    "expected": "The serialized data is kept and a warning is logged.",
+    "actual": "The value becomes None without a trace.",
+    "tags": [
+      "serialization",
+      "state"
+    ],
+    "framework": "LangGraph",
+    "language": "Python",
+    "fixReasoning": "Dropping data on a failed load is destructive and hides the cause. Other paths of the same serializer, for pydantic and blocked types, already return the serialized payload, so the constructor and method paths should do the same, with a one-time warning per type that names the exception type only, since the message could quote stored content.",
+    "fixChange": "Return the serialized payload instead of None when the constructor or method ext codes cannot rebuild an object, in the way the pydantic and blocked-type paths already behave, and log a one-time warning for each type that names only the exception type.",
+    "note": "Fixed upstream: langchain-ai/langgraph change #9251"
+  },
+  {
+    "repository": "langchain-ai/langgraph",
+    "issueUrl": "https://github.com/langchain-ai/langgraph/issues/7259",
+    "fixUrl": "https://github.com/langchain-ai/langgraph/pull/9638",
+    "title": "The async Postgres saver serializes every call with an instance lock even when it uses a connection pool",
+    "summary": "The async Postgres checkpoint saver takes an instance level lock around every database call. That lock is needed when the saver shares a single connection, but it was also taken when the saver was built on a connection pool, where each call receives its own connection. Concurrent runs in one process, and the background saves and writes within one run, therefore waited for one another, which limits throughput under high concurrency.",
+    "expected": "With a pool the saver does not serialize its calls.",
+    "actual": "Every call waits for the one before it.",
+    "tags": [
+      "concurrency",
+      "async"
+    ],
+    "framework": "LangGraph",
+    "language": "Python",
+    "fixReasoning": "The lock protects a resource that can serve one call at a time, and a pool does not have that limitation. When the saver was built on a pool, the lock only added latency, so skipping it there keeps the protection where it is needed and lets the pool's connections work in parallel.",
+    "fixChange": "Skip the saver's instance lock in the cursor helper when it was created with an async connection pool, and keep taking it when the saver shares a single connection.",
+    "note": "Fixed upstream: langchain-ai/langgraph change #9638"
+  },
+  {
+    "repository": "microsoft/autogen",
+    "issueUrl": "https://github.com/microsoft/autogen/issues/6991",
+    "fixUrl": "https://github.com/microsoft/autogen/pull/6993",
+    "title": "Tools with array parameters lose the object fields defined for their items",
+    "summary": "The function that converts a JSON schema into a Pydantic model does not handle array items that are objects with defined properties. Those items fall back to generic objects that allow any extra properties, so the specific field definitions are lost, which affects MCP tools whose input schema contains an array of objects.",
+    "expected": "Array items with object schemas become models with their declared fields.",
+    "actual": "Items become generic objects with additional properties allowed.",
+    "tags": [
+      "schema",
+      "tool-calling"
+    ],
+    "framework": "AutoGen",
+    "language": "Python",
+    "fixReasoning": "The field type extraction handled objects at the top level but did not recurse into an array's items schema, so nested object schemas never reached the code that builds models. Recursing there gives the same treatment to items as to other properties.",
+    "fixChange": "Make the field type extraction process object schemas inside array items recursively, so that their properties become model fields, and add a test case for array items with defined object properties.",
+    "note": "Fixed upstream: microsoft/autogen change #6993"
+  },
+  {
+    "repository": "microsoft/autogen",
+    "issueUrl": "https://github.com/microsoft/autogen/issues/6985",
+    "fixUrl": "https://github.com/microsoft/autogen/pull/7026",
+    "title": "Cycle checking in a graph flow can reject graphs whose cycles all have exit conditions",
+    "summary": "The check that detects cycles without an exit condition sometimes raises that error for graphs that only contain valid cycles. The depth-first search returns as soon as it finds a cycle with a valid exit, without cleaning up its recursion state, so stale entries remain and can mislead the processing of later unvisited nodes, particularly in graphs with several components.",
+    "expected": "Graphs whose cycles all have exit conditions are accepted.",
+    "actual": "An error says that a cycle was detected without an exit condition.",
+    "tags": [
+      "loops",
+      "validation"
+    ],
+    "framework": "AutoGen",
+    "language": "Python",
+    "fixReasoning": "A depth-first search needs its stack of active nodes to be exact when it moves on to the next start node. Returning early skipped the removal of the current node from the recursion set and the path, and those leftovers made a later node appear to be on a cycle that had already been judged. The state has to be cleaned before returning.",
+    "fixChange": "Clean up the recursion stack and the path before returning from the cycle search when a cycle with a valid exit is found, so later nodes are checked against correct state.",
+    "note": "Fixed upstream: microsoft/autogen change #7026"
+  },
+  {
+    "repository": "microsoft/autogen",
+    "issueUrl": "https://github.com/microsoft/autogen/issues/6953",
+    "fixUrl": "https://github.com/microsoft/autogen/pull/6954",
+    "title": "The Redis cache cannot store streamed model output",
+    "summary": "The chat completion cache wrapped around a streaming model call passes a list of streamed items to the store, and Redis cannot store lists, so writing and reading the cache produce type errors. The disk cache accepted the same value, so the problem appeared only with Redis.",
+    "expected": "Streamed output is cached in a form that every store supports.",
+    "actual": "Writing and reading the cache raise type errors with Redis.",
+    "tags": [
+      "streaming",
+      "serialization"
+    ],
+    "framework": "AutoGen",
+    "language": "Python",
+    "fixReasoning": "The cache write for the streamed response happened before the stream had finished and was given the intermediate list. Writing to the cache only after the stream has completed, so that the final result is what gets stored, lets the same code path serve stores with different value type limits.",
+    "fixChange": "Make the cache wrapper set the cache entry only after the stream has completed, so that the stored value is the final result rather than a list of chunks.",
+    "note": "Fixed upstream: microsoft/autogen change #6954"
+  },
+  {
+    "repository": "microsoft/autogen",
+    "issueUrl": "https://github.com/microsoft/autogen/issues/6882",
+    "fixUrl": "https://github.com/microsoft/autogen/pull/6883",
+    "title": "A team used as a tool fails when the model calls it twice in parallel",
+    "summary": "When an agent has a team as a tool and the model issues parallel tool calls, which is the default, the first execution completes but the second fails with a message that the team is already running and cannot run again until it is stopped. Teams and agents keep internal state, which conflicts with concurrent use.",
+    "expected": "Users know that these tools cannot be run concurrently and how to avoid it.",
+    "actual": "The second call fails with an error that the team is already running.",
+    "tags": [
+      "concurrency",
+      "tool-calling"
+    ],
+    "framework": "AutoGen",
+    "language": "Python",
+    "fixReasoning": "The limitation follows from the stateful design of agents and teams, which cannot be changed in this fix, and the reliable way to avoid it is to stop the model from issuing parallel calls for such tools. The resolution was therefore to document the restriction where users configure these tools.",
+    "fixChange": "Add warnings to the documentation of the agent tool and the team tool that parallel tool calls are not supported because of their internal state, and show how to disable parallel tool calls. This is a documentation change.",
+    "note": "Fixed upstream (documentation): microsoft/autogen change #6883"
+  },
+  {
+    "repository": "microsoft/autogen",
+    "issueUrl": "https://github.com/microsoft/autogen/issues/6793",
+    "fixUrl": "https://github.com/microsoft/autogen/pull/6797",
+    "title": "Saving a team's state to JSON fails because messages contain datetime objects",
+    "summary": "When the state of a team is saved and dumped to JSON, a serialization error is raised because the messages contain datetime values, and the saved state is cut off at the first datetime. Chat messages and agent events both carry a creation timestamp as a datetime object that the standard JSON encoder cannot handle.",
+    "expected": "The state of a team can be written to a JSON file.",
+    "actual": "A TypeError says that an object of type datetime is not JSON serializable.",
+    "tags": [
+      "serialization",
+      "state"
+    ],
+    "framework": "AutoGen",
+    "language": "Python",
+    "fixReasoning": "The message dump kept the timestamp in its native type, which is fine for Python objects but not for JSON text. Dumping messages in a mode that renders such values as JSON-compatible data makes the saved state serializable by the standard encoder.",
+    "fixChange": "Handle datetime values when messages are dumped, for both the chat message and the agent event base classes, so that the saved team state can be written with the standard JSON encoder.",
+    "note": "Fixed upstream: microsoft/autogen change #6797"
+  },
+  {
+    "repository": "microsoft/autogen",
+    "issueUrl": "https://github.com/microsoft/autogen/issues/6746",
+    "fixUrl": "https://github.com/microsoft/autogen/pull/6747",
+    "title": "A graph flow with a termination condition ends immediately on the second task",
+    "summary": "With a termination condition configured, the first task of a graph flow runs correctly, but the second task skips every agent and goes straight to the stop agent, so the conversation cannot continue without resetting the team state.",
+    "expected": "The team can run several tasks in a row without an explicit reset.",
+    "actual": "The second task terminates at once without running any agent.",
+    "tags": [
+      "state",
+      "loops"
+    ],
+    "framework": "AutoGen",
+    "language": "Python",
+    "fixReasoning": "State from the first run, such as the record of which nodes had completed and which conditions had been met, was left in place and made the second run believe that the graph was already finished. A new task has to start from a clean execution state even though the team object is reused.",
+    "fixChange": "Reset the graph execution state at the start of a new task so that GraphFlow supports multiple task executions without an explicit reset, while keeping the behaviour of the termination condition.",
+    "note": "Fixed upstream: microsoft/autogen change #6747"
+  },
+  {
+    "repository": "run-llama/llama_index",
+    "issueUrl": "https://github.com/run-llama/llama_index/issues/22831",
+    "fixUrl": "https://github.com/run-llama/llama_index/pull/22836",
+    "title": "Streaming from the refine synthesizers collapses into one chunk",
+    "summary": "Since one release, the refine and compact-and-refine response synthesizers with streaming enabled no longer stream. The generator yields the whole answer as a single chunk after the full generation time, where earlier versions gave one chunk per token. A chat engine that builds on the compact synthesizer lost token streaming too, which silently turned a stream of hundreds of events into one.",
+    "expected": "One chunk per generated token.",
+    "actual": "A single chunk with the full answer at the end.",
+    "tags": [
+      "streaming",
+      "async"
+    ],
+    "framework": "LlamaIndex",
+    "language": "Python",
+    "fixReasoning": "A change that restructured the synthesizer made the streaming path consume the generator before returning it, so the caller received the completed text instead of the live stream. Restoring the pass-through of the generator brings back the earlier token-level behaviour for every component that builds on it.",
+    "fixChange": "Restore streaming in the compact and refine synthesizers so that the response generator is handed to the caller instead of being collapsed into one chunk.",
+    "note": "Fixed upstream: run-llama/llama_index change #22836"
+  },
+  {
+    "repository": "run-llama/llama_index",
+    "issueUrl": "https://github.com/run-llama/llama_index/issues/22772",
+    "fixUrl": "https://github.com/run-llama/llama_index/pull/22773",
+    "title": "The metadata replacement postprocessor crashes when the target key is present with a None value",
+    "summary": "The postprocessor passes the node's original content as the default argument of a dictionary lookup, and a default is only used when the key is absent. If the target metadata key exists with an explicit None, the lookup returns None, setting that as the node content raises a validation error, and the documented fallback to the original content never happens.",
+    "expected": "A None value falls back to the node's original content, as documented.",
+    "actual": "A Pydantic ValidationError.",
+    "tags": [
+      "type-errors",
+      "validation"
+    ],
+    "framework": "LlamaIndex",
+    "language": "Python",
+    "fixReasoning": "The code treated an absent key and a key holding None as the same thing, which a dictionary default does not. Reading the value first and falling back only when it is None covers both cases with the documented behaviour.",
+    "fixChange": "Read the target metadata value and fall back to the node's original content when the value is None as well as when the key is absent, instead of relying on the default argument of the dictionary lookup.",
+    "note": "Fixed upstream: run-llama/llama_index change #22773"
+  },
+  {
+    "repository": "run-llama/llama_index",
+    "issueUrl": "https://github.com/run-llama/llama_index/issues/22159",
+    "fixUrl": "https://github.com/run-llama/llama_index/pull/22162",
+    "title": "An agent's own structured output function is ignored when it runs inside an agent workflow",
+    "summary": "A function agent configured with its own structured output function or output class produces structured output when it is run directly, but the same agent silently ignores that configuration inside an agent workflow, where only the workflow's own function is consulted. The agent's parameter looks supported yet has no effect in that setting.",
+    "expected": "The agent's own configuration is honoured in both ways of running it.",
+    "actual": "Only the workflow-level function is used.",
+    "tags": [
+      "structured-output",
+      "multi-agent"
+    ],
+    "framework": "LlamaIndex",
+    "language": "Python",
+    "fixReasoning": "When an agent completes, the workflow parsed its output with its own settings only and never looked at the settings of the agent that had just run, unlike the single-agent path. The running agent's configuration has to be consulted first, with the workflow's as the fallback.",
+    "fixChange": "Make the workflow's output parsing use the structured output function or output class of the agent that completed when it has one, falling back to the workflow-level settings otherwise.",
+    "note": "Fixed upstream: run-llama/llama_index change #22162"
+  },
+  {
+    "repository": "run-llama/llama_index",
+    "issueUrl": "https://github.com/run-llama/llama_index/issues/22178",
+    "fixUrl": "https://github.com/run-llama/llama_index/pull/22179",
+    "title": "The text of an async streaming chat response is empty after the stream finishes",
+    "summary": "After an asynchronous streaming chat finishes, converting the response to a string or reading its response attribute gives an empty string, although the tokens streamed correctly and were saved to the memory. The string conversion only drains the synchronous queue and never the asynchronous one, and the code that writes the response to the history never stored the final text on the object.",
+    "expected": "The final text is available on the response, as with the synchronous version.",
+    "actual": "An empty string.",
+    "tags": [
+      "streaming",
+      "state"
+    ],
+    "framework": "LlamaIndex",
+    "language": "Python",
+    "fixReasoning": "The text existed while it was being written to the history, but the object never received it, and the string conversion looked in a queue that the async path does not use. Storing the final text on the response when it is written to memory makes both ways of reading it work without draining anything.",
+    "fixChange": "Assign the final streamed text to the response attribute in the functions that write the response to the history, in both the synchronous and the asynchronous versions, so that the string conversion and the attribute return the text.",
+    "note": "Fixed upstream: run-llama/llama_index change #22179"
+  },
+  {
+    "repository": "run-llama/llama_index",
+    "issueUrl": "https://github.com/run-llama/llama_index/issues/22134",
+    "fixUrl": "https://github.com/run-llama/llama_index/pull/22135",
+    "title": "Tool schemas mark variadic arguments as required parameters that the model must fill",
+    "summary": "The function tool builds its parameter schema by looping over a function's parameters without checking their kind, so variable positional and variable keyword arguments become required schema properties, and an unannotated one has no type. The model is then asked to supply a phantom argument on every call, and strict function calling of one provider rejects the schema.",
+    "expected": "Variadic arguments are left out of the schema.",
+    "actual": "They appear as required properties, sometimes without a type.",
+    "tags": [
+      "schema",
+      "tool-calling"
+    ],
+    "framework": "LlamaIndex",
+    "language": "Python",
+    "fixReasoning": "Variadic parameters are not named inputs that a caller can pass by keyword, so a schema entry for them is meaningless. The check has to be on the parameter's kind rather than on its name, so that a normal parameter that happens to be called args or kwargs is still included.",
+    "fixChange": "Skip parameters whose kind is variable positional or variable keyword when generating the tool schema from a function, and keep ordinary parameters that are merely named args or kwargs.",
+    "note": "Fixed upstream: run-llama/llama_index change #22135"
+  },
+  {
+    "repository": "run-llama/llama_index",
+    "issueUrl": "https://github.com/run-llama/llama_index/issues/22413",
+    "fixUrl": "https://github.com/run-llama/llama_index/pull/22552",
+    "title": "Parameter descriptions from a docstring never reach the schema that is sent to the model",
+    "summary": "The function tool parses a description for each parameter from the docstring, but they are assigned to the model fields after the Pydantic model has already been built. The JSON schema is derived from a core schema that was frozen when the model was created, so the later change is never reflected, and the model sees no descriptions for the arguments.",
+    "expected": "Docstring descriptions appear in the tool schema.",
+    "actual": "The schema has no per-parameter descriptions.",
+    "tags": [
+      "schema",
+      "tool-calling"
+    ],
+    "framework": "LlamaIndex",
+    "language": "Python",
+    "fixReasoning": "In Pydantic version two, changing a field after creation does not update the schema that was already compiled. The descriptions have to be known when the model is created, so they must be passed into the schema construction rather than patched on afterwards.",
+    "fixChange": "Pass the parameter descriptions parsed from the docstring into the construction of the tool schema, so that they are part of the model when it is created and appear in the schema sent to the model.",
+    "note": "Fixed upstream: run-llama/llama_index change #22552"
+  },
+  {
+    "repository": "deepset-ai/haystack",
+    "issueUrl": "https://github.com/deepset-ai/haystack/issues/13029",
+    "fixUrl": "https://github.com/deepset-ai/haystack/pull/13604",
+    "title": "The auto-merging retriever fails with an unclear error when a matched document has no parent",
+    "summary": "The retriever demands that every matched document has a parent id in its metadata. If the matched set contains the root of the hierarchy, or a document that was never part of it, the whole pipeline fails with an error about a missing metadata field. The retriever's own merge logic keeps documents without parents, but validation rejects them before that point. In the report, a single store held both the leaves and the root.",
+    "expected": "The contract is stated clearly, and the error explains what went wrong.",
+    "actual": "An unclear ValueError stops the pipeline.",
+    "tags": [
+      "validation",
+      "vector-store"
+    ],
+    "framework": "Haystack",
+    "language": "Python",
+    "fixReasoning": "The retriever is designed for two document stores, one searched by the upstream retriever for the leaf documents and one holding the parents, and the report put everything into one. Since there is no behaviour to fix, the useful change is to explain the two-store contract and make the error for a parentless document point at it.",
+    "fixChange": "Clarify the two-store contract of the auto-merging retriever in its documentation and improve the text of the error that is raised for a document without a parent, with no change in behaviour.",
+    "note": "Fixed upstream (documentation and error text): deepset-ai/haystack change #13604"
+  },
+  {
+    "repository": "deepset-ai/haystack",
+    "issueUrl": "https://github.com/deepset-ai/haystack/issues/13431",
+    "fixUrl": "https://github.com/deepset-ai/haystack/pull/13432",
+    "title": "Variadic arguments are added to a function tool's schema as required parameters",
+    "summary": "Creating a tool from a function treats variable positional and variable keyword arguments like named parameters, so each becomes a required property under its own name and the model is asked to fill it. A value for the keyword form reaches the function nested under its own name, a value for the positional form makes the call fail because it cannot be passed by keyword, and an untyped one cannot become a tool at all.",
+    "expected": "Variadic arguments are left out of the schema.",
+    "actual": "They are required properties, and calls built from them fail or misbehave.",
+    "tags": [
+      "tool-calling",
+      "schema"
+    ],
+    "framework": "Haystack",
+    "language": "Python",
+    "fixReasoning": "The loop over the function's signature never looked at the kind of each parameter. Skipping variable positional and variable keyword parameters before the type hint check avoids both the phantom properties and the missing type hint error, and the decorator inherits the fix because it calls the same function.",
+    "fixChange": "Skip variable positional and variable keyword parameters in the loop that builds a tool schema from a function, before the type hint check, so that they no longer appear in the schema or cause errors.",
+    "note": "Fixed upstream: deepset-ai/haystack change #13432"
+  },
+  {
+    "repository": "deepset-ai/haystack",
+    "issueUrl": "https://github.com/deepset-ai/haystack/issues/13166",
+    "fixUrl": "https://github.com/deepset-ai/haystack/pull/13169",
+    "title": "An injected state parameter wrapped in Annotated breaks tool creation",
+    "summary": "Plain agent state parameters, and optional ones, are deliberately left out of the schema shown to the model. When the same parameter is wrapped in an Annotated type, the wrapper prevents it from being recognised, so Pydantic is asked to generate a schema for the state class and fails with a schema generation error. Wrapping a component's input in the same way fails similarly.",
+    "expected": "The annotated state parameter is excluded from the schema and the live state is injected at execution.",
+    "actual": "A SchemaGenerationError stops the creation of the tool.",
+    "tags": [
+      "schema",
+      "tool-calling"
+    ],
+    "framework": "Haystack",
+    "language": "Python",
+    "fixReasoning": "The helper that unwraps optional types and tests for the state class only understood optional unions, so an Annotated wrapper hid the real type. Looking through the wrapper first lets the existing state detection apply to the annotated form as well.",
+    "fixChange": "Make the unwrapping helper also remove Annotated wrappers before the state check, so that an annotated state parameter is recognised and excluded from the generated schema.",
+    "note": "Fixed upstream: deepset-ai/haystack change #13169"
+  },
+  {
+    "repository": "deepset-ai/haystack",
+    "issueUrl": "https://github.com/deepset-ai/haystack/issues/13144",
+    "fixUrl": "https://github.com/deepset-ai/haystack/pull/13149",
+    "title": "Pipeline connect silently skips a new edge between components that are already connected through other sockets",
+    "summary": "When a sender socket already feeds the receiver component through one socket and the receiver socket already receives another output of the same sender, connecting a new socket pair returns normally but adds no edge. After connecting x to x and y to y, adding x to y is dropped without any message, which loses an intended input for a list-typed receiver.",
+    "expected": "The new edge between the two sockets is added.",
+    "actual": "The call returns and nothing is connected.",
+    "tags": [
+      "validation",
+      "state"
+    ],
+    "framework": "Haystack",
+    "language": "Python",
+    "fixReasoning": "The duplicate connection check compared only the names of the components, so any new pair between two connected components looked like an existing one. The check has to look at the exact pair of sockets, which is what identifies an edge.",
+    "fixChange": "Make the duplicate check in the connect method compare the exact sender and receiver socket pair of the edge instead of only the component names, and add a regression test and a release note.",
+    "note": "Fixed upstream: deepset-ai/haystack change #13149"
+  },
+  {
+    "repository": "pydantic/pydantic-ai",
+    "issueUrl": "https://github.com/pydantic/pydantic-ai/issues/12609",
+    "fixUrl": "https://github.com/pydantic/pydantic-ai/pull/12638",
+    "title": "Step persistence leaves a tool effect marked started when the tool raises a retry or failure signal",
+    "summary": "When a tool raises the retry signal or the failure signal, the persistence capability records the call's effect as started and never completes it. The run finishes normally, but the list of unresolved tool effects goes on reporting a call that ended long before, so recovery code that will not continue past unresolved effects turns down runs with nothing left to reconcile.",
+    "expected": "A retried or failed call is recorded as failed.",
+    "actual": "It stays started forever.",
+    "tags": [
+      "state",
+      "retries"
+    ],
+    "framework": "Pydantic AI",
+    "language": "Python",
+    "fixReasoning": "The effect is written as started before the tool executes and finished only in the hook that follows a normal return or a generic error. The core re-raises these two signals past both hooks, so neither ever ran for them. The persistence capability has to handle that path itself and mark the effect failed.",
+    "fixChange": "Record a step persistence tool call that ends in the retry or the failure signal as failed instead of leaving it started, so that the list of unresolved effects only holds calls that really are unresolved.",
+    "note": "Fixed upstream: pydantic/pydantic-ai change #12638"
+  },
+  {
+    "repository": "pydantic/pydantic-ai",
+    "issueUrl": "https://github.com/pydantic/pydantic-ai/issues/11901",
+    "fixUrl": "https://github.com/pydantic/pydantic-ai/pull/12429",
+    "title": "Gemini rejects tool returns that contain a reference key, because it reads them as part references",
+    "summary": "Gemini reads a reference key anywhere inside a function response as a pointer to a named part of that response. A tool that returns a JSON Schema, an OpenAPI document or a dashboard layout therefore makes the next request fail with an invalid argument error, since the referenced name does not match any part. Pydantic's own platform worked around it by wrapping every Gemini model.",
+    "expected": "Tool returns that contain such keys reach the model unchanged in meaning.",
+    "actual": "A 400 error says that the referenced name matches no part.",
+    "tags": [
+      "model-provider",
+      "serialization"
+    ],
+    "framework": "Pydantic AI with Gemini",
+    "language": "Python",
+    "fixReasoning": "The adapter put the structured response object into the function response as it was, and the provider gives one particular key a special meaning. Sending a response that contains that key as JSON text removes the ambiguity without changing what the model reads, so the fix is to detect the key and use the text form.",
+    "fixChange": "Send Gemini tool returns that contain a reference key as JSON text instead of as a structured response object, and leave other returns unchanged.",
+    "note": "Fixed upstream: pydantic/pydantic-ai change #12429"
+  },
+  {
+    "repository": "pydantic/pydantic-ai",
+    "issueUrl": "https://github.com/pydantic/pydantic-ai/issues/13044",
+    "fixUrl": "https://github.com/pydantic/pydantic-ai/pull/13076",
+    "title": "A tool failure signal inside code mode becomes a retry of the code instead of a failed result",
+    "summary": "A tool can raise a failure signal to report something the model cannot fix by retrying, such as no calendar being connected. Called directly, it comes back as a failed tool result and costs no retry. Called from code run in code mode, the same signal surfaces as a runtime error that is turned into a retry of the code, so the model is told to fix code that is fine, and a few failures in a row end the run with an exceeded retries error.",
+    "expected": "A nested tool failure is a failed result and spends no retry.",
+    "actual": "It becomes a retry of the run code tool.",
+    "tags": [
+      "retries",
+      "error-handling"
+    ],
+    "framework": "Pydantic AI",
+    "language": "Python",
+    "fixReasoning": "A tool's outcome should not depend on how it was called. The code mode runtime converted every exception raised by a nested tool into a failure of the snippet, which is the right treatment for a bug in the code but wrong for a tool that deliberately signals a failure the model cannot repair.",
+    "fixChange": "Treat a nested tool's failure signal in code mode as a failed result instead of a retry of the snippet, consistent with how a direct call to the same tool behaves.",
+    "note": "Fixed upstream: pydantic/pydantic-ai change #13076"
+  },
+  {
+    "repository": "microsoft/semantic-kernel",
+    "issueUrl": "https://github.com/microsoft/semantic-kernel/issues/14662",
+    "fixUrl": "https://github.com/microsoft/semantic-kernel/pull/14668",
+    "title": "An allowed URL path prefix can be escaped with dot segments because validation and the HTTP client read the path differently",
+    "summary": "When the allowed base URLs contain a path prefix, a URL whose path only looks like it lies inside that prefix passes validation, but the HTTP client normalises the path before sending, so the server receives a request outside the prefix. The validator checks the raw string while the client checks the normalised path, which is a classic differential between two parsers, and encoded dots behave the same way.",
+    "expected": "The validator judges the same path that the client will really request.",
+    "actual": "A path with dot segments passes validation and then reaches a different location.",
+    "tags": [
+      "validation",
+      "sandbox"
+    ],
+    "framework": "Semantic Kernel",
+    "language": "Python",
+    "fixReasoning": "Security checks must be made on the value that is used. Decoding encoded dots and removing dot segments in the same way as the standard describes, before the prefix is compared, makes the validator agree with the client, while empty segments are kept because the client keeps them as well and other percent encodings are left alone.",
+    "fixChange": "Decode encoded dots and apply the standard dot segment removal to the path before matching it against the allowed prefixes, while preserving empty segments and other percent encodings, with tests for escapes with plain and encoded dots and for harmless single dots.",
+    "note": "Fixed upstream: microsoft/semantic-kernel change #14668"
+  },
+  {
+    "repository": "microsoft/semantic-kernel",
+    "issueUrl": "https://github.com/microsoft/semantic-kernel/issues/14582",
+    "fixUrl": "https://github.com/microsoft/semantic-kernel/pull/14586",
+    "title": "Adding execution settings without overwriting still replaces the default settings",
+    "summary": "Adding execution settings to a prompt template configuration with overwriting disabled still replaces the existing entry when the settings have no service id, which is the usual case. The message that settings already exist is also logged at the wrong moment: it appears after each successful add, but not when an add is really refused.",
+    "expected": "An existing default entry is kept and the refusal is logged.",
+    "actual": "The entry is overwritten and the log message appears at the wrong time.",
+    "tags": [
+      "configuration",
+      "state"
+    ],
+    "framework": "Semantic Kernel",
+    "language": "Python",
+    "fixReasoning": "The membership check used the service id, which is None, while the entry is stored under a default name, so the check never found it. Using the same key for the check and for the storage makes the overwrite flag work, and the log call belongs in the branch where an add is refused.",
+    "fixChange": "Check for an existing entry under the same key that is used for storing, which is the service id or the default name, so that overwrite set to false is honoured for default settings, and log the message only when an add is refused.",
+    "note": "Fixed upstream: microsoft/semantic-kernel change #14586"
+  },
+  {
+    "repository": "microsoft/semantic-kernel",
+    "issueUrl": "https://github.com/microsoft/semantic-kernel/issues/14619",
+    "fixUrl": "https://github.com/microsoft/semantic-kernel/pull/14624",
+    "title": "Rendered prompt parsing decodes HTML entities twice, so a user message with an entity reaches the model changed",
+    "summary": "A user value that contains an entity such as an escaped ampersand is escaped once by the template engine, decoded once by the XML parser, and then decoded a second time by an extra unescape call, so it reaches the model as a plain ampersand. Every prompt function with a message tag is affected, because the kernel function from a prompt uses this parsing before calling the chat service.",
+    "expected": "The user's text arrives exactly as written.",
+    "actual": "A literal entity in the user's text is turned into the character it stands for.",
+    "tags": [
+      "parsing",
+      "prompting"
+    ],
+    "framework": "Semantic Kernel",
+    "language": "Python",
+    "fixReasoning": "The parser already decodes entities when it reads the text of an element, so an additional unescape on the result decodes a second time and alters text that legitimately contains entity-like sequences. The redundant call has to go.",
+    "fixChange": "Remove the redundant HTML unescape from the rendered prompt parsing so that entities are decoded exactly once, and add tests with text such as a literal escaped ampersand in a user message.",
+    "note": "Fixed upstream: microsoft/semantic-kernel change #14624"
+  },
+  {
+    "repository": "microsoft/semantic-kernel",
+    "issueUrl": "https://github.com/microsoft/semantic-kernel/issues/14534",
+    "fixUrl": "https://github.com/microsoft/semantic-kernel/pull/14536",
+    "title": "The volatile memory store raises an error when searching an empty collection",
+    "summary": "Searching the nearest matches in a collection that exists but holds no records raises a ValueError about reshaping an array of size zero, while searching a collection that does not exist already returns an empty list. A search on a new or emptied collection should simply return no results.",
+    "expected": "An empty list.",
+    "actual": "ValueError: cannot reshape array of size 0.",
+    "tags": [
+      "vector-store",
+      "type-errors"
+    ],
+    "framework": "Semantic Kernel",
+    "language": "Python",
+    "fixReasoning": "The code stacked the embeddings into an array and reshaped it without considering the empty case, and an empty array cannot be reshaped that way. Returning early when there are no records handles it before any array work starts.",
+    "fixChange": "Return an empty list at the start of the nearest matches method when the collection holds no records, ahead of the code that stacks the embeddings, and add a test for the empty collection.",
+    "note": "Fixed upstream: microsoft/semantic-kernel change #14536"
+  },
+  {
+    "repository": "modelcontextprotocol/python-sdk",
+    "issueUrl": "https://github.com/modelcontextprotocol/python-sdk/issues/3483",
+    "fixUrl": "https://github.com/modelcontextprotocol/python-sdk/pull/3627",
+    "title": "The client never retries a tool call after a header mismatch rejection",
+    "summary": "In the 2026-07-28 protocol version, a client that has not listed a tool sends the call without the parameter headers that the tool requires, and the server rejects it with a header mismatch error. The specification says the client should list the tools again and retry, but the client stopped there, and the same happened when a tool's schema gained an annotation after it had been listed.",
+    "expected": "The client refreshes its knowledge of the tool and retries once.",
+    "actual": "The call fails with error -32020.",
+    "tags": [
+      "protocol",
+      "retries"
+    ],
+    "framework": "MCP Python SDK",
+    "language": "Python",
+    "fixReasoning": "The mismatch means the client's cached header map is missing or stale, and a single retry after relisting repairs it. Retrying more than once could loop forever on a server that keeps rejecting, so the retry is limited to one attempt.",
+    "fixChange": "Retry a tool call once after a header mismatch rejection on a Streamable HTTP connection, after the tool listing has been refreshed so that the parameter headers can be built.",
+    "note": "Fixed upstream: modelcontextprotocol/python-sdk change #3627"
+  },
+  {
+    "repository": "modelcontextprotocol/python-sdk",
+    "issueUrl": "https://github.com/modelcontextprotocol/python-sdk/issues/3601",
+    "fixUrl": "https://github.com/modelcontextprotocol/python-sdk/pull/3635",
+    "title": "An interactive login that takes longer than the discovery timeout makes the client fall back to the legacy protocol",
+    "summary": "In automatic mode, the client first probes the server with a discover request and falls back to the legacy handshake if that fails. The request's fixed timeout of ten seconds also counted the time that a person needs for an interactive OAuth login in the browser, so a slow login looked like a legacy server and the client settled on an older protocol version against a server that spoke the newer one.",
+    "expected": "Time spent waiting for the user does not count against the request timeout.",
+    "actual": "A login longer than ten seconds ends the probe and triggers the fallback.",
+    "tags": [
+      "timeout",
+      "authentication"
+    ],
+    "framework": "MCP Python SDK",
+    "language": "Python",
+    "fixReasoning": "The timeout is meant to bound the server's response, not the person's actions. The clock therefore has to stop while the OAuth provider waits for the redirect handler, and run again afterwards, so that only real server latency is measured.",
+    "fixChange": "Make the request timeout stop counting while the OAuth client provider waits on the interactive redirect handling, so that a long login no longer looks like an unresponsive or legacy server.",
+    "note": "Fixed upstream: modelcontextprotocol/python-sdk change #3635"
+  },
+  {
+    "repository": "modelcontextprotocol/python-sdk",
+    "issueUrl": "https://github.com/modelcontextprotocol/python-sdk/issues/3254",
+    "fixUrl": "https://github.com/modelcontextprotocol/python-sdk/pull/3614",
+    "title": "A server reports empty experimental capabilities differently through initialize and discovery",
+    "summary": "A server with no experimental capabilities configured sent an empty object for that field in its initialize result, yet left the field out of its discover result, so one and the same server looked different depending on the way a client connected, which matters for clients that compare or cache capabilities.",
+    "expected": "Both discovery paths describe the same server in the same way.",
+    "actual": "An empty object through one path and an omitted field through the other.",
+    "tags": [
+      "protocol",
+      "configuration"
+    ],
+    "framework": "MCP Python SDK",
+    "language": "Python",
+    "fixReasoning": "An empty experimental object carries no information, and omission is the lighter and already existing behaviour of the discover path. Making initialize omit the field as well aligns the two paths on the wire.",
+    "fixChange": "Omit an unset experimental capability from the initialize result, as the discover result already does, so that an unconfigured server no longer sends an empty experimental object.",
+    "note": "Fixed upstream: modelcontextprotocol/python-sdk change #3614"
+  },
+  {
+    "repository": "huggingface/smolagents",
+    "issueUrl": "https://github.com/huggingface/smolagents/issues/1799",
+    "fixUrl": "https://github.com/huggingface/smolagents/pull/1800",
+    "title": "The code agent validates the executor type too early, which prevents custom executors in subclasses",
+    "summary": "The constructor of the code agent validates the executor type before the executor is created. A subclass that overrides the method creating the Python executor in order to provide its own executor cannot pass a custom executor type, because initialization raises a ValueError for any non-standard value.",
+    "expected": "Validation happens where the executor is created, so subclasses can handle their own types.",
+    "actual": "A ValueError in the constructor.",
+    "tags": [
+      "configuration",
+      "sandbox"
+    ],
+    "framework": "smolagents",
+    "language": "Python",
+    "fixReasoning": "The constructor made a decision that belongs to the creation method, which is the extension point for subclasses. Moving the check there keeps the same validation for the built-in executors while letting a subclass that overrides the method accept other types.",
+    "fixChange": "Move the executor type validation from the code agent's constructor into the method that creates the Python executor, keeping the existing checks for the built-in executors.",
+    "note": "Fixed upstream: huggingface/smolagents change #1800"
+  },
+  {
+    "repository": "huggingface/smolagents",
+    "issueUrl": "https://github.com/huggingface/smolagents/issues/1795",
+    "fixUrl": "https://github.com/huggingface/smolagents/pull/1797",
+    "title": "The local Python executor cannot run code that defines an Enum class",
+    "summary": "The local Python executor creates every class with the generic type function, which fails for classes that use a custom metaclass such as Enum. The metaclass needs a special namespace object while the class body runs, so code that defines a simple Enum fails with an execution error at the class line, although such code is common in agent output.",
+    "expected": "Enums and other classes with custom metaclasses can be defined.",
+    "actual": "The executor reports that code execution failed at the class definition.",
+    "tags": [
+      "sandbox",
+      "parsing"
+    ],
+    "framework": "smolagents",
+    "language": "Python",
+    "fixReasoning": "Python resolves the metaclass of a class statement and asks it to prepare the namespace before the body runs. Using the plain type call skips that step, so metaclasses that depend on it break. The executor has to follow the same protocol as the language.",
+    "fixChange": "Create classes in the local Python executor through their resolved metaclass and its namespace preparation instead of the generic type call, so that Enum and other custom metaclass classes work.",
+    "note": "Fixed upstream: huggingface/smolagents change #1797"
+  },
+  {
+    "repository": "langchain-ai/langchain",
+    "issueUrl": "https://github.com/langchain-ai/langchain/issues/40367",
+    "fixUrl": "https://github.com/langchain-ai/langchain/pull/41093",
+    "title": "The Fireworks chat model drops streamed reasoning and omits it from later tool loop requests",
+    "summary": "With a reasoning model on Fireworks, the non-streaming call returns the reasoning content, but streaming loses it, and the outbound conversion leaves it out when the conversation is sent again in a tool loop. The model therefore loses its own reasoning between tool calls, which affects its context.",
+    "expected": "Reasoning is preserved when streaming and replayed in tool loops.",
+    "actual": "It is missing from streamed chunks and from subsequent requests.",
+    "tags": [
+      "streaming",
+      "model-provider"
+    ],
+    "framework": "LangChain with Fireworks",
+    "language": "Python",
+    "fixReasoning": "The streaming converter only copied the text and tool call fields of each chunk, and the outbound message converter did not include the reasoning field at all. Both have to carry it so that reasoning models retain their context across tool calls.",
+    "fixChange": "Preserve the reasoning content of streamed chunks, replay string reasoning from assistant messages in tool loops, report reasoning token usage, and keep reasoning, text and tool call content blocks separate in version one streams.",
+    "note": "Fixed upstream: langchain-ai/langchain change #41093"
+  },
+  {
+    "repository": "langchain-ai/langchain",
+    "issueUrl": "https://github.com/langchain-ai/langchain/issues/40808",
+    "fixUrl": "https://github.com/langchain-ai/langchain/pull/40844",
+    "title": "An agent with a response format loops or fails with a 400 error for GPT-6 models on Bedrock",
+    "summary": "When a model has no profile, the agent chooses its structured output method from a list of model families known to support the provider-native method. The GPT-6 family was missing from that list, so agents using those models through Bedrock chose tool-based structured output, which can loop or return a 400 error.",
+    "expected": "These models use provider-native structured output.",
+    "actual": "The agent loops or fails with a bad request error.",
+    "tags": [
+      "structured-output",
+      "model-provider"
+    ],
+    "framework": "LangChain",
+    "language": "Python",
+    "fixReasoning": "Without a profile, the only signal is the model name, so the fallback list has to recognise new families as they appear. Adding the GPT-6 names, both bare and with the prefixes that Bedrock uses, makes the agent pick the native method for them.",
+    "fixChange": "Recognise the GPT-6 model IDs, bare and with Bedrock prefixes, in the fallback list of models with structured output, with unit tests for both forms.",
+    "note": "Fixed upstream: langchain-ai/langchain change #40844"
+  },
+  {
+    "repository": "microsoft/autogen",
+    "issueUrl": "https://github.com/microsoft/autogen/issues/6984",
+    "fixUrl": "https://github.com/microsoft/autogen/pull/7022",
+    "title": "The Redis backed cache never reports a hit because string values are not handled",
+    "summary": "Retrieving a response from the Redis cache is skipped because the cache check does not handle string values, so the cache reports a miss every time, even when the key exists, and the model is called again each time. This happens when Redis is configured to decode its responses, or when it returns strings because of a JSON decode error.",
+    "expected": "A cached entry is found and returned with the cached flag set.",
+    "actual": "Every call reaches the model and the cached flag stays false.",
+    "tags": [
+      "state",
+      "cost"
+    ],
+    "framework": "AutoGen",
+    "language": "Python",
+    "fixReasoning": "The check method assumed that the store returns objects of the cached value type, but Redis may return strings. Handling a string by parsing it into the expected value lets the same lookup work for both kinds of store.",
+    "fixChange": "Make the cache check in the chat completion cache handle string values returned by the Redis store, so that existing entries are recognised as hits.",
+    "note": "Fixed upstream: microsoft/autogen change #7022"
+  },
+  {
+    "repository": "microsoft/autogen",
+    "issueUrl": "https://github.com/microsoft/autogen/issues/6788",
+    "fixUrl": "https://github.com/microsoft/autogen/pull/6799",
+    "title": "An assistant agent that makes several tool calls triggers a 422 error from the OpenAI API",
+    "summary": "When an assistant agent in a team makes multiple tool calls over a multi-turn task, the OpenAI API answers with an unprocessable entity error saying that the content field of a message is required. The transformed assistant message carries tool calls but has no content field, which the API requires even when it is empty.",
+    "expected": "Assistant messages with tool calls are accepted by the API.",
+    "actual": "A 422 error says that a field of the message body is required.",
+    "tags": [
+      "tool-calling",
+      "model-provider"
+    ],
+    "framework": "AutoGen",
+    "language": "Python",
+    "fixReasoning": "The message transformation omitted the content key when the assistant message only contained tool calls, but the API treats the key as mandatory. Including the field, with an empty value where there is no text, satisfies the contract.",
+    "fixChange": "Make the message transformer always include the content field in assistant messages that carry tool calls, so that the request validates when the agent makes several tool calls in a conversation.",
+    "note": "Fixed upstream: microsoft/autogen change #6799"
+  },
+  {
+    "repository": "microsoft/autogen",
+    "issueUrl": "https://github.com/microsoft/autogen/issues/6841",
+    "fixUrl": "https://github.com/microsoft/autogen/pull/6846",
+    "title": "Listing the tools of an MCP server fails on a string format named json",
+    "summary": "Connecting to an MCP server whose tools use a string property with the format json makes the conversion of its schemas fail with an error that the format is unknown for that property. The schema conversion raises on formats it does not recognise, and the server in the report uses this format for an icon field.",
+    "expected": "The tools of the server can be listed.",
+    "actual": "A FormatNotSupportedError stops the tool listing.",
+    "tags": [
+      "schema",
+      "protocol"
+    ],
+    "framework": "AutoGen",
+    "language": "Python",
+    "fixReasoning": "The converter keeps a fixed list of supported string formats and rejects anything else, but the format json is legal in schemas used by real servers. Adding it to the supported set lets such schemas be deserialized.",
+    "fixChange": "Add support for the string format json in the JSON schema to Pydantic conversion, so that tools whose schemas use it can be listed, and add a test for it.",
+    "note": "Fixed upstream: microsoft/autogen change #6846"
+  },
+  {
+    "repository": "run-llama/llama_index",
+    "issueUrl": "https://github.com/run-llama/llama_index/issues/22115",
+    "fixUrl": "https://github.com/run-llama/llama_index/pull/22137",
+    "title": "The Redis key value store breaks when the client decodes responses",
+    "summary": "When the Redis client is configured to decode its responses, the keys come back as strings instead of bytes, and the store's get all methods call decode on them, which fails. An earlier fix for this had been reverted a month later without an explanation, so the problem came back.",
+    "expected": "Both bytes and strings are accepted as keys.",
+    "actual": "An error because a string has no decode method.",
+    "tags": [
+      "vector-store",
+      "type-errors"
+    ],
+    "framework": "LlamaIndex",
+    "language": "Python",
+    "fixReasoning": "The code assumed that Redis always returns bytes, which depends on a client option. Checking whether a key is bytes before decoding it makes the code correct for both settings.",
+    "fixChange": "Check that a key is of type bytes before decoding it in the sync and async get all methods of the Redis key value store, so that clients with decoded responses work.",
+    "note": "Fixed upstream: run-llama/llama_index change #22137"
+  },
+  {
+    "repository": "run-llama/llama_index",
+    "issueUrl": "https://github.com/run-llama/llama_index/issues/21385",
+    "fixUrl": "https://github.com/run-llama/llama_index/pull/22154",
+    "title": "Falsy metadata values are lost when nodes are indexed in Azure AI Search",
+    "summary": "When a node is written to an Azure AI Search index, a guard tests the metadata value for truthiness, so legitimate falsy values such as zero, an empty string, an empty list or false are silently discarded and the field stays absent. On retrieval the node then shows None where the metadata held a real zero or blank value.",
+    "expected": "Every explicitly set metadata value is stored.",
+    "actual": "Falsy values come back as None.",
+    "tags": [
+      "vector-store",
+      "type-errors"
+    ],
+    "framework": "LlamaIndex with Azure AI Search",
+    "language": "Python",
+    "fixReasoning": "A truthiness test cannot tell a missing value from a falsy one. Comparing with None, which is what a missing value is, keeps every value that was explicitly set.",
+    "fixChange": "Change the guard when building the index document so that it checks for a value that is not None instead of a truthy value, which preserves zero, empty strings, empty lists and false.",
+    "note": "Fixed upstream: run-llama/llama_index change #22154"
+  },
+  {
+    "repository": "langchain-ai/langgraph",
+    "issueUrl": "https://github.com/langchain-ai/langgraph/issues/6604",
+    "fixUrl": "https://github.com/langchain-ai/langgraph/pull/9401",
+    "title": "A remote graph streamed with subgraphs enabled reports namespaces without the caller's prefix",
+    "summary": "When a remote graph is streamed with subgraph events inside a node of another graph, the events it yields drop the caller's namespace prefix: an event comes back with only the subgraph's own segment instead of the outer prefix followed by it. The events that the remote graph pushes to the parent's stream, and an in-memory subgraph streamed in the same way, keep the prefix.",
+    "expected": "Namespaces match those of an in-memory graph.",
+    "actual": "The outer prefix is missing from the yielded events.",
+    "tags": [
+      "streaming",
+      "tracing"
+    ],
+    "framework": "LangGraph",
+    "language": "Python",
+    "fixReasoning": "The remote graph built the namespace of each yielded event from the remote side's segments alone and forgot that it was running within a caller whose own namespace belongs in front. Prepending the caller's namespace gives the same result as an in-memory subgraph.",
+    "fixChange": "Keep the caller's namespace in front of the segments reported by the stream and async stream methods of the remote graph when subgraph events are enabled, so that they match an in-memory graph.",
+    "note": "Fixed upstream: langchain-ai/langgraph change #9401"
+  },
+  {
+    "repository": "openai/openai-agents-python",
+    "issueUrl": "https://github.com/openai/openai-agents-python/issues/5333",
+    "fixUrl": "https://github.com/openai/openai-agents-python/pull/5334",
+    "title": "The conversations session sends writes above the documented limit of twenty items per request",
+    "summary": "Adding items to a conversations session forwards the whole input list in one create request. With 21 or 41 items the request therefore exceeds the documented limit of 20 items per call.",
+    "expected": "Large writes are split into requests of at most twenty items.",
+    "actual": "One oversized request is sent.",
+    "tags": [
+      "validation",
+      "state"
+    ],
+    "framework": "OpenAI Agents SDK",
+    "language": "Python",
+    "fixReasoning": "The method assumed that a single call could take any number of items, which the API contract does not allow. Sending sequential batches of at most twenty, in the original order, respects the limit, and a lock for each instance keeps other reads, appends, pops and clears from being interleaved with a batched write.",
+    "fixChange": "Send writes to the conversations API in sequential batches of at most twenty items, preserving the order and the public interface, and hold a per-instance lock so that other operations cannot interleave with a batched write.",
+    "note": "Fixed upstream: openai/openai-agents-python change #5334"
+  }
+]

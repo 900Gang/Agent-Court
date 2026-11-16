@@ -78,7 +78,13 @@ export async function fetchCandidates(
     for (const item of items) {
       if (candidates.length >= limit) break;
       if (!looksUseful(item, now)) continue;
-      const fix = await findMergedFix(gh, repository, item.number as number);
+      // One issue whose timeline cannot be read (deleted, transferred, locked) must not end the whole listing.
+      let fix: Candidate["fix"] | null;
+      try {
+        fix = await findMergedFix(gh, repository, item.number as number);
+      } catch {
+        continue;
+      }
       if (!fix) continue;
       const labels = Array.isArray(item.labels)
         ? item.labels.flatMap((label) => (isRecord(label) && typeof label.name === "string" ? [oneLine(label.name, 50)] : [])).slice(0, 10)
