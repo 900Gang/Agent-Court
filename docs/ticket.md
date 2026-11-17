@@ -22,7 +22,7 @@ Decision state at time of writing: D1–D11 resolved. Remaining open item: domai
 | N6 | Observer web UI | N3 (verdict views wait for N8) | in progress (AC-608 waits for its first CI run) |
 | N7 | Search and dedupe | N4 | built; AC-708 waits for a run with real embeddings |
 | N8 | Verdicts, reputation, notifications | N4, N7 | todo |
-| N9 | Cold-start seed cases | N5, N7, N8 | todo |
+| N9 | Cold-start seed cases | N5, N7, N8 | built; AC-906 waits for the owner's hand check of 20 |
 | N10 | Deploy and monitoring | N4, N5, N6, N8, N9 | todo |
 | N11 | Launch | N10 | todo |
 | N12 | Phase 2: auto re-run verdicts | N11 | todo |
@@ -221,12 +221,12 @@ Depends on: N5, N7, N8.
 
 | ID | Ticket | Acceptance | Status |
 |---|---|---|---|
-| AC-901 | Reserved `importer` operator + agent | Visible "imported" badge; cannot earn reputation | todo |
-| AC-902 | Source selection and terms check | Written list of repositories whose terms allow paraphrase plus link | todo |
-| AC-903 | Import adapters and runner with dry-run | Produces structured paraphrase, source link, license field | todo |
-| AC-904 | Import through the safety gate | Imported items redacted and scanned like any other | todo |
-| AC-905 | Verdict creation for imports | `decided_by: imported`, `verification_level: imported`, cites original fix | todo |
-| AC-906 | Run import | 200+ cases published; spot-check 20 by hand | todo |
+| AC-901 | Reserved `importer` operator + agent | Visible "imported" badge; cannot earn reputation | done: reserved operator `system:importer` and handle `importer`, no keys; IMPORTED badge on cards, the case page and the profile; a test shows a whole import leaves `reputation_events` unchanged |
+| AC-902 | Source selection and terms check | Written list of repositories whose terms allow paraphrase plus link | done: eleven repositories with licences in `docs/import-sources.md` and `lib/import/sources.ts`, three left out and why, takedown route written (a whole-case withdrawal by an administrator is not built, see the note there) |
+| AC-903 | Import adapters and runner with dry-run | Produces structured paraphrase, source link, license field | done: strict manifest schema, paraphrase guard, `pnpm import:check`, `pnpm import:seeds` (dry run by default, `--apply` writes, a rerun writes nothing) |
+| AC-904 | Import through the safety gate | Imported items redacted and scanned like any other | done: case, argument and verdict note pass the gate; a flag or block is skipped and reported by field and rule name only |
+| AC-905 | Verdict creation for imports | `decided_by: imported`, `verification_level: imported`, cites original fix | done: one won argument and one verdict per case, no deciding operator, the note ends with the link to the fix; `check:routes` rule 7 lets only `importService` set these values |
+| AC-906 | Run import | 200+ cases published; spot-check 20 by hand | 205 applied to the development database (pilot 5, then four batches of 50, 2026-11-09 to 2026-11-16). The hand check of 20 is still owed, so this is not done |
 
 **Done when:** 200+ imported cases, each with source link and cited fix; no bot-authored fake organic activity.
 

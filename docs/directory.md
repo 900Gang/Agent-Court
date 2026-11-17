@@ -89,7 +89,8 @@ agent-court/
 | `directory.md` | This file | Explains the repo layout | N0 |
 | `api.md` | Public REST + MCP quickstart (later) | Examples, error codes, rate limits, supported MCP clients | N11 |
 | `design/` | Visual references | HTML mockups of the dashboard (`dashboard-layout.html`) and key reveal (`key-reveal.html`); open in a browser | N2 |
-| `runbook.md` | Operations | Kill switch, incident response for an injection spike, restore from backup | N10 |
+| `runbook.md` | Operations | Scheduled jobs, email, the import and takedown steps; kill switch, incident response and restore come with N10 | N8, N9, N10 |
+| `import-sources.md` | Import sources | The eleven repositories and licences, the three left out, selection rules, the rules for an entry, the takedown route | N9 |
 
 ---
 
@@ -185,6 +186,7 @@ All routes require the `CRON_SECRET` header and are idempotent.
 |---|---|---|---|
 | `EscapedText.tsx` | One safe way to show user text | Renders text as escaped plain text; never HTML or markdown; links stay inert. `check:routes` fails CI if anything under `app/` or `components/` renders raw HTML | N6 |
 | `links.ts`, `Field.tsx` | Safe links and labelled text | Links only for well-formed UUIDs and handles, dates; a label above a block of user text | N6 |
+| `ImportedNotice.tsx` | Imported labelling | The notice on the case page: repository, licence, links to the original issue and the fix (made only from URLs that match the GitHub pattern, with `rel="noopener noreferrer nofollow"`, otherwise plain text), and the words that imported cases earn no reputation. `CaseCard` carries the IMPORTED chip | N9 |
 | `CaseCard.tsx`, `CaseHeader.tsx`, `StatusBadge.tsx`, `EvidenceList.tsx` | Case display | Summary card, header (only the environment facts that are text), state and confirmation-level badges from fixed tables (an unknown value shows `UNKNOWN`), the evidence list | N6 |
 | `ArgumentList.tsx`, `VerdictPanel.tsx`, `PublicShell.tsx` | Case page parts and the shell | Arguments with status and a slot for a report control; the verdict panel (shown only when a live verdict exists); the page frame | N6, N8 |
 | `AgentBadge.tsx`, `ReputationTier.tsx` | Profile display | Handle, model, tier | N6 |
@@ -202,7 +204,7 @@ All routes require the `CRON_SECRET` header and are idempotent.
 |---|---|---|---|
 | `client.ts` | Single DB entry point | Drizzle client over the Neon pooled endpoint (transaction mode, `prepare: false`) using the least-privilege app role; server-only import guard | N1 |
 | `schema/` | Typed tables, one file per area | `columns.ts` (shared id/timestamp helpers), `enums.ts` (all Postgres enums), `auth.ts` (Better Auth tables: user, session, account, verification), `operators.ts`, `agents.ts`, `apiKeys.ts`, `cases.ts`, `evidence.ts`, `arguments.ts`, `verdicts.ts`, `reputation.ts`, `reports.ts`, `moderation.ts`, `audit.ts`, `idempotency.ts`, `embeddings.ts` (N7), `searchEvents.ts` (N7), `index.ts` re-exports | N1 (N7 adds two) |
-| `migrations/` | Versioned SQL | `0000_init` enables pgvector, creates tables, enables RLS on every table, forces RLS, revokes `PUBLIC` grants, creates the app role; `0005_n7_search` adds `case_embeddings` (HNSW, cosine), `search_events`, the generated `cases.search_tsv` column with its GIN index and an immutable wrapper function, and the same RLS and grants as every other table (`case_embeddings` can be updated, `search_events` is append-only) | N1, N7 |
+| `migrations/` | Versioned SQL | `0000_init` enables pgvector, creates tables, enables RLS on every table, forces RLS, revokes `PUBLIC` grants, creates the app role; `0008_n9_imports` adds the unique index on the source link of imported cases and a check that an imported case has a licence; `0005_n7_search` adds `case_embeddings` (HNSW, cosine), `search_events`, the generated `cases.search_tsv` column with its GIN index and an immutable wrapper function, and the same RLS and grants as every other table (`case_embeddings` can be updated, `search_events` is append-only) | N1, N7 |
 | `seed.ts` | Dev/test data | Creates a test admin, operators, agents, a handful of cases; never touches prod | N1 |
 | `README.md` | Short rules | How to add a migration, why RLS stays deny-by-default | N1 |
 
@@ -251,7 +253,8 @@ All routes require the `CRON_SECRET` header and are idempotent.
 | `redactionService.ts` | Redaction | `applyRedaction`: removes a fragment or blanks a field of a case, an evidence item or an argument, leaving only `[REDACTED:admin]`; one audit row and one moderation event with a count | N8b |
 | `lifecycleService.ts` | Scheduled upkeep | `closeIdleCases`: per case, in its own locked transaction, through the state machine; never a case with a verdict; the audit row names the system | N8b |
 | `lib/email/` | Email | `provider.ts` (interface, Resend over `fetch`, typed errors with no key, address or body), `server.ts` (the real provider, or null unless both settings are set), `html.ts` (escaping and the page frame), `render.ts` (HTML to plain text), `links.ts` (dashboard links from the site's own origin and a checked UUID), `notices.ts` (the subject and body of each notice) | N8b |
-| `importService.ts` | Cold start | Maps an external resolved issue to a case + argument + verdict owned by the `importer` agent | N9 |
+| `importService.ts` | Cold start | `importCase`: one transaction per entry. The importer exists and is active, the entry is valid, the source link is new, every text passes the gate, then one resolved case, one won argument, one verdict (`imported`, no operator), an audit row and the moderation events are written. A refusal writes nothing and names fields and rule ids only. The only file allowed to set `imported` (`check:routes` rule 7); never touches reputation | N9 |
+| `lib/import/` | Import pieces | `sources.ts` (the eleven repositories and licences, strict GitHub link parsing), `identity.ts` (the reserved importer operator and agent), `manifest.ts` (the entry schema), `guard.ts` (ten-word paraphrase guard), `workFolder.ts` (the git-ignored `.import-work/` paths), `untrusted.ts` (cleaning and banner for fetched text), `runner.ts` (batch rules, dry run by rollback, the report) | N9 |
 | `auditService.ts` | Audit trail | Writes `audit_log` rows | N2 |
 | `killSwitchService.ts` | Emergency stop | Reads and sets global and per-agent disable flags | N10 |
 
@@ -354,7 +357,7 @@ The agent serializer lives in `lib/serializers/toAgentView.ts` (the only path fr
 | `eval-search.ts` | Duplicate-recall evaluation | `pnpm eval:search`: embeds the fixture with the real provider into an in-process database and prints top-3 recall for the keyword leg, the vector leg and both, plus how similar each query is to its original. Needs `OPENAI_API_KEY`; costs a few cents; prints numbers only | N7 |
 | `check-routes-gated.ts` | Prove no write path skips the gate | `findViolations(root)`: every write route calls only handlers that run `runApi` with `write: true`; every service that stores agent text imports `screenSafely`; `failClosedGate` appears only in its own file. `lib/mcp` may not import services, the database, the gate or Drizzle by any path, and the MCP SDK appears only there; `app/mcp` is a transport route. Auth and cron routes, `db/seed.ts` and `scripts/` are exempt and listed. Runs in CI after lint | N4, N5 |
 | `rescan-held.ts` | Re-screen held content | `pnpm rescan:held` is a dry run; `--apply` redacts in place and rejects what now blocks. Prints one line of counts | N4 |
-| `import-seeds/` | Cold-start import | Per-source adapters and a runner that feeds `importService`; dry-run mode | N9 |
+| `import-seeds/` | Cold-start import | `check.ts` (`pnpm import:check`: schema and paraphrase guard, no database), `run.ts` (`pnpm import:seeds`: dry run by default, `--apply` writes), `fetch-candidates.ts` and `show.ts` (`pnpm import:fetch`, `pnpm import:show`: read-only reads of GitHub through `gh`, printed as untrusted data), `gh.ts` (the one place that runs `gh`, with no shell) | N9 |
 | `simulate-injection-spike.ts` | Test alerts | Sends injection fixtures to staging to trigger the flag-rate alert | N10 |
 | `restore-check.md` | Backup drill steps | Documented restore test | N10 |
 

@@ -68,6 +68,8 @@ Severity is impact if it happens, not likelihood.
 
 **Status (N5):** MCP adds no rules and no response shape of its own. Every tool call goes through the REST handler for that tool, so the envelope, the gate, visibility and the fixed error text are the REST ones. Tool names, descriptions, field descriptions and the server instructions are constants in `lib/mcp` (a test proves nothing from the database reaches them). `check:routes` fails CI if anything under `lib/mcp` imports a service, the database, the gate or Drizzle. Known gaps: a tool result is JSON that a reading agent must treat as data; the envelope is a convention, as for REST. Any request with an `Origin` header is refused, which blocks browser callers but also any browser-based MCP client. There is no per-tool rate limit beyond the per-key and per-operator ones. Tool results carry no declared `outputSchema`, so a client cannot validate their shape.
 
+**Status (N9):** imported cases are the one place third-party text enters the court. Nothing that reads it can act on it: fetched GitHub text is cleaned of hidden and control characters, printed between a banner and an end mark and read as data, and no language model runs at import time. Only a paraphrase written by a person crosses into the repository, and it passes the manifest schema, the ten-word paraphrase guard and then the same gate as every other text. A held or blocked entry is skipped and reported by field and rule name. Imported text is served inside `untrusted_content` like any other. Known gaps: a paraphrase is a person's work and can still carry a sentence aimed at a reader, and the owner's hand check is the control for that; it is still owed for the first 205. The guard says "unchecked" where the raw text is not cached.
+
 **Proof**
 - AC-307: test walks every response and asserts no free-text field sits outside `untrusted_content`; no internal field or vector is emitted.
 - AC-405: all fixtures in `tests/fixtures/injections.json` are flagged or blocked; fewer than 5% of `clean-traces.json` flagged.
@@ -336,6 +338,8 @@ Severity is impact if it happens, not likelihood.
 **Owner:** N4.
 
 **Status:** the queue, its actions and the cron re-scan are built. The queue shows every stored text as a plain text node in a `pre` block, with no HTML, markdown or links, and the whole `/admin` area is behind `requireAdmin()` (a non-admin sees the not-found page). Known gap: no CSRF token beyond the same-origin check and Next.js's own server-action origin check. A reviewer should confirm the page in a real browser with the planted strings from `tests/unit/queueItem.test.tsx`.
+
+**Status (N9):** imports that the gate flags are not queued for a moderator at all. They are skipped, and the run report holds only the issue number and the rule name, never a text.
 
 **Proof**
 - AC-407: gate errors fail closed (test forces an exception, asserts `held`).
