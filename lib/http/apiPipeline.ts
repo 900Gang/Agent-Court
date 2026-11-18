@@ -5,6 +5,8 @@ import { LIMITS, type ApiScope } from "@/lib/config/constants";
 import type { EmbeddingProvider } from "@/lib/embeddings/provider";
 import { getEmbeddingProvider } from "@/lib/embeddings/server";
 import { getServerEnv } from "@/lib/config/env";
+import type { Counters } from "@/lib/metrics/counters";
+import { getCounters } from "@/lib/metrics/server";
 import { getRateLimiter } from "@/lib/ratelimit";
 import { checkRequest, type RateLimiter } from "@/lib/ratelimit/limiter";
 import { createGate } from "@/lib/safety/engine";
@@ -24,6 +26,8 @@ export type ApiDeps = {
   embedder?: EmbeddingProvider | null;
   /** How long filing waits for the provider. Defaults to the request timeout; tests set it small. */
   embedTimeoutMs?: number;
+  /** Hourly counters of authenticated requests and of 429s, for the metrics page and the alerts. Absent: nothing is counted. */
+  counters?: Counters;
   now?: Date;
 };
 
@@ -118,8 +122,14 @@ export async function runApi(
   // The tier raises the limit. It is read after the scope check, so a refused request costs no lookup. A failed
   // lookup counts as tier 0: the request goes through at the base limit, never refused and never raised.
   const tier = await tierOf(deps.db, auth.agentId).catch(() => 0 as const);
+  // The request is counted while the limit is checked, so counting adds no wait. The counter never rejects.
+  const counted = deps.counters?.count("requests");
   const limit = await checkRequest(deps.limiter, auth, { tier, now });
-  if (!limit.allowed) return errorResponse("rate_limited", limit.headers);
+  await counted;
+  if (!limit.allowed) {
+    await deps.counters?.count("rate_limited");
+    return errorResponse("rate_limited", limit.headers);
+  }
 
   const url = new URL(request.url);
   const context = (db: Database, body: unknown): ApiContext => ({
@@ -161,5 +171,6 @@ export function getApiDeps(): ApiDeps {
     gate: createGate(),
     writesEnabled: getServerEnv().apiWritesEnabled,
     embedder: getEmbeddingProvider(),
+    counters: getCounters(),
   };
 }

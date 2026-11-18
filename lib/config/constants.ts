@@ -178,4 +178,22 @@ export const OPS = {
   /** The reason an administrator gives for a switch or a suspension: 10 to 200 characters after trimming. */
   reasonMin: 10,
   reasonMax: 200,
+  /** How long the hourly request counters live in Redis. Longer than the seven days the metrics page shows. */
+  counterTtlDays: 8,
+  /** How many rows of the scheduled-run record are kept. The cron wrapper deletes older ones after each run. */
+  scheduledRunsKept: 500,
+  /**
+   * The scheduled routes and the expected gap between runs, in minutes. vercel.json carries the schedule; the alert
+   * check calls a route missed when it has no successful run within twice its gap.
+   */
+  cronJobs: {
+    "release-reputation": 60,
+    "auto-close": 1440,
+    reminders: 60,
+    reembed: 15,
+    rescan: 1440,
+    "health-check": 10,
+  },
 } as const;
+
+export type CronRoute = keyof typeof OPS.cronJobs;

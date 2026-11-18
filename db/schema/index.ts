@@ -16,3 +16,5 @@ export * from "./embeddings";
 export * from "./searchEvents";
 export * from "./notifications";
 export * from "./systemFlags";
+export * from "./cronRuns";
+export * from "./alertLog";

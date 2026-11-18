@@ -14,6 +14,7 @@ import { sendDueNotices } from "@/lib/services/notificationService";
 import { releaseDue } from "@/lib/services/reputationService";
 import { rescanHeld } from "@/lib/services/rescanService";
 import { jsonResponse } from "../apiPipeline";
+import { runCron } from "../cronRun";
 import { verifyCronRequest } from "../cronAuth";
 import { errorResponse } from "../errors";
 
@@ -33,7 +34,7 @@ const BATCH = 100;
  */
 export async function handleCronRescan(request: Request, deps: CronDeps): Promise<Response> {
   if (!verifyCronRequest(request, deps.secret)) return errorResponse("unauthorized");
-  const summary = await rescanHeld(deps.db, deps.gate, { limit: BATCH, apply: true });
+  const summary = await runCron(deps.db, "rescan", () => rescanHeld(deps.db, deps.gate, { limit: BATCH, apply: true }));
   return jsonResponse(200, summary);
 }
 
@@ -45,15 +46,17 @@ export async function handleCronRescan(request: Request, deps: CronDeps): Promis
  */
 export async function handleCronReembed(request: Request, deps: CronDeps): Promise<Response> {
   if (!verifyCronRequest(request, deps.secret)) return errorResponse("unauthorized");
-  if (!deps.embedder) {
-    return jsonResponse(200, { disabled: true, embedded: 0, current: 0, unsafe: 0, failed: 0, remaining: 0 });
-  }
-  const summary = await reembedStale(deps.db, deps.embedder, {
-    limit: SEARCH_TUNING.cronBatch,
-    timeoutMs: EMBEDDING.cronTimeoutMs,
-    deadline: Date.now() + SEARCH_TUNING.cronBudgetMs,
+  const embedder = deps.embedder;
+  const summary = await runCron(deps.db, "reembed", async () => {
+    if (!embedder) return { disabled: true, embedded: 0, current: 0, unsafe: 0, failed: 0, remaining: 0 };
+    const done = await reembedStale(deps.db, embedder, {
+      limit: SEARCH_TUNING.cronBatch,
+      timeoutMs: EMBEDDING.cronTimeoutMs,
+      deadline: Date.now() + SEARCH_TUNING.cronBudgetMs,
+    });
+    return { disabled: false, ...done };
   });
-  return jsonResponse(200, { disabled: false, ...summary });
+  return jsonResponse(200, summary);
 }
 
 /**
@@ -63,7 +66,7 @@ export async function handleCronReembed(request: Request, deps: CronDeps): Promi
  */
 export async function handleCronAutoClose(request: Request, deps: CronDeps): Promise<Response> {
   if (!verifyCronRequest(request, deps.secret)) return errorResponse("unauthorized");
-  const summary = await closeIdleCases(deps.db, deps.now ?? new Date(), { limit: LIFECYCLE.cronBatch });
+  const summary = await runCron(deps.db, "auto-close", () => closeIdleCases(deps.db, deps.now ?? new Date(), { limit: LIFECYCLE.cronBatch }));
   return jsonResponse(200, summary);
 }
 
@@ -74,8 +77,8 @@ export async function handleCronAutoClose(request: Request, deps: CronDeps): Pro
  */
 export async function handleCronReleaseReputation(request: Request, deps: CronDeps): Promise<Response> {
   if (!verifyCronRequest(request, deps.secret)) return errorResponse("unauthorized");
-  const released = await releaseDue(deps.db, deps.now ?? new Date());
-  return jsonResponse(200, { released });
+  const summary = await runCron(deps.db, "release-reputation", async () => ({ released: await releaseDue(deps.db, deps.now ?? new Date()) }));
+  return jsonResponse(200, summary);
 }
 
 /**
@@ -86,9 +89,12 @@ export async function handleCronReleaseReputation(request: Request, deps: CronDe
  */
 export async function handleCronReminders(request: Request, deps: CronDeps): Promise<Response> {
   if (!verifyCronRequest(request, deps.secret)) return errorResponse("unauthorized");
-  if (!deps.mailer || !deps.baseUrl) {
-    return jsonResponse(200, { disabled: true, sent: 0, failed: 0, skippedNoAddress: 0, alreadySent: 0 });
-  }
-  const summary = await sendDueNotices(deps.db, deps.mailer, deps.now ?? new Date(), { baseUrl: deps.baseUrl, limit: LIFECYCLE.cronBatch });
-  return jsonResponse(200, { disabled: false, ...summary });
+  const mailer = deps.mailer;
+  const baseUrl = deps.baseUrl;
+  const summary = await runCron(deps.db, "reminders", async () => {
+    if (!mailer || !baseUrl) return { disabled: true, sent: 0, failed: 0, skippedNoAddress: 0, alreadySent: 0 };
+    const done = await sendDueNotices(deps.db, mailer, deps.now ?? new Date(), { baseUrl, limit: LIFECYCLE.cronBatch });
+    return { disabled: false, ...done };
+  });
+  return jsonResponse(200, summary);
 }
