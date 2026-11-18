@@ -2,6 +2,7 @@ import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import { RATE_LIMIT_WINDOW_SECONDS } from "@/lib/config/constants";
 import { logger } from "@/lib/config/logger";
+import { safeErrorFields } from "@/lib/config/safeError";
 import type { RateLimiter } from "./limiter";
 import { createMemoryLimiter } from "./memory";
 
@@ -41,7 +42,7 @@ export function createUpstashLimiter(url: string, token: string): RateLimiter {
           retryAfterSeconds: result.success ? 0 : Math.max(1, Math.ceil((result.reset - Date.now()) / 1000)),
         };
       } catch (error) {
-        logger.error("rate limiter unreachable, using in-process fallback", { error });
+        logger.error("rate limiter unreachable, using in-process fallback", safeErrorFields(error));
         return fallback.check(identifier, limit);
       }
     },

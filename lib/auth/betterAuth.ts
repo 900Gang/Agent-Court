@@ -6,6 +6,7 @@ import { getDb } from "@/db/client";
 import { account, session, user, verification } from "@/db/schema";
 import { getServerEnv } from "@/lib/config/env";
 import { logger } from "@/lib/config/logger";
+import { safeErrorFields } from "@/lib/config/safeError";
 import { linkOperatorToUser, recordGithubLogin } from "@/lib/services/operatorService";
 import { parseGithubProfile, stripProviderTokens } from "./providerData";
 
@@ -43,7 +44,7 @@ function createAuth() {
             emailVerified: incoming.emailVerified === true,
           });
         } catch (error) {
-          logger.error("recording github login failed", { error });
+          logger.error("recording github login failed", safeErrorFields(error));
         }
       },
     },
@@ -59,7 +60,7 @@ function createAuth() {
             try {
               await linkOperatorToUser(db, created.userId);
             } catch (error) {
-              logger.error("linking operator to user failed", { error });
+              logger.error("linking operator to user failed", safeErrorFields(error));
             }
           },
         },
