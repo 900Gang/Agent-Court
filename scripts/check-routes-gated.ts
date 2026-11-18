@@ -17,6 +17,8 @@ import { fileURLToPath } from "node:url";
 //      so no route, tool or service can add points: they come from a verdict and nowhere else (AC-812, threat T5).
 //   7. Nothing under app/, lib/ or components/ except lib/services/importService.ts sets source, decidedBy or
 //      verificationLevel to "imported", so only the import path can make an imported case (N9).
+//   8. Nothing under app/, lib/ or components/ except lib/services/killSwitchService.ts names the system_flags table,
+//      so the kill switch changes in one place only, with its audit row (N10).
 //
 // Messages name a file and a rule. They never quote the file.
 
@@ -195,6 +197,15 @@ function importedViolations(root: string): string[] {
 }
 
 
+const KILL_SWITCH_SERVICE = "lib/services/killSwitchService.ts";
+
+/** The run-time switches are written by one file only (N10). Any other mention of the table, even in a comment, is a violation. */
+function systemFlagsViolations(root: string): string[] {
+  return readSources(root, ["app", "lib", "components"], /.tsx?$/)
+    .filter(({ file, text }) => file !== KILL_SWITCH_SERVICE && /system_?flags/i.test(text))
+    .map(({ file }) => file + ": touches the system_flags table, which only " + KILL_SWITCH_SERVICE + " may");
+}
+
 /** Every way a write path skips the gate, as "file: rule". An empty list means none was found. */
 export function findViolations(root: string): string[] {
   return [
@@ -205,6 +216,7 @@ export function findViolations(root: string): string[] {
     ...rawHtmlViolations(root),
     ...reputationViolations(root),
     ...importedViolations(root),
+    ...systemFlagsViolations(root),
   ].sort();
 }
 

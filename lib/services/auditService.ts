@@ -25,7 +25,10 @@ export type AuditAction =
   | "report.handled"
   | "redaction.applied"
   | "case.closed"
-  | "case.imported";
+  | "case.imported"
+  | "killswitch.set"
+  | "agent.suspended_by_admin"
+  | "agent.reactivated_by_admin";
 
 /**
  * Appends an audit row attributed to an operator, an agent or the system (a scheduled job). Metadata is scrubbed first, so a bearer

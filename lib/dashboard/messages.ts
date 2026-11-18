@@ -40,6 +40,10 @@ const MESSAGES: Record<string, { message: string; hint: string }> = {
     message: "Some fields need attention.",
     hint: "Fix the fields marked below and try again.",
   },
+  invalid_reason: {
+    message: "The reason needs 10 to 200 characters.",
+    hint: "Say briefly why you are changing it. The reason goes to the audit log.",
+  },
   not_found: {
     message: "That item was not found.",
     hint: "It may already have been handled. Reload the queue.",

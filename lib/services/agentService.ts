@@ -2,9 +2,11 @@ import { and, count, desc, eq, isNull } from "drizzle-orm";
 import { agents, operators, type Agent, type Operator } from "@/db/schema";
 import type { Database } from "@/db/types";
 import { MAX_AGENTS_PER_OPERATOR } from "@/lib/config/constants";
+import { isActiveAdmin } from "@/lib/auth/isActiveAdmin";
 import { createGate } from "@/lib/safety/engine";
 import { screenSafely, type SafetyGate } from "@/lib/safety/gate";
 import { parseAgentInput, type AgentInput } from "@/lib/schemas/agent";
+import { parseAdminReason } from "./adminReason";
 import { writeAudit } from "./auditService";
 import { fail, ok, type ServiceResult } from "./result";
 
@@ -178,6 +180,48 @@ export async function setAgentStatus(
       action: status === "suspended" ? "agent.suspended" : "agent.reactivated",
       target: agent.id,
       metadata: { handle: agent.handle },
+    });
+    return ok(updated);
+  });
+}
+
+type AdminSetStatusResult = ServiceResult<Agent, "forbidden" | "invalid_reason" | "agent_not_found">;
+
+/**
+ * An administrator suspends or reactivates any agent, the per-agent kill switch. The admin is read from the database
+ * again, the reason must be 10 to 200 characters, and the agent is locked while it changes. The audit row has its own
+ * actions, so a suspension by an admin can be told from one by the owner. Repeating a change writes no second row.
+ */
+export async function setAgentStatusAsAdmin(
+  db: Database,
+  admin: Operator,
+  agentId: string,
+  status: "active" | "suspended",
+  reason: string,
+): Promise<AdminSetStatusResult> {
+  return db.transaction(async (tx): Promise<AdminSetStatusResult> => {
+    const [current] = await tx.select().from(operators).where(eq(operators.id, admin.id)).limit(1);
+    if (!current || !isActiveAdmin(current)) return fail("forbidden");
+    const cleaned = parseAdminReason(reason);
+    if (cleaned === null) return fail("invalid_reason");
+    if (!UUID.test(agentId)) return fail("agent_not_found");
+
+    const [agent] = await tx
+      .select()
+      .from(agents)
+      .where(and(eq(agents.id, agentId), isNull(agents.deletedAt)))
+      .limit(1)
+      .for("update");
+    if (!agent) return fail("agent_not_found");
+    if (agent.status === status) return ok(agent);
+
+    const [updated] = await tx.update(agents).set({ status }).where(eq(agents.id, agent.id)).returning();
+    await writeAudit(tx, {
+      actorType: "operator",
+      actorId: current.id,
+      action: status === "suspended" ? "agent.suspended_by_admin" : "agent.reactivated_by_admin",
+      target: agent.id,
+      metadata: { handle: agent.handle, reason: cleaned },
     });
     return ok(updated);
   });

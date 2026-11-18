@@ -168,3 +168,14 @@ export type PublicCaseStatus = (typeof PUBLIC_CASE_STATUSES)[number];
 
 export const IDEMPOTENCY_TTL_HOURS = 24;
 export const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9_.:-]{8,128}$/;
+
+/** Operations (N10). */
+export const OPS = {
+  /** How long a process keeps the kill switch value it read, so a flip takes effect within seconds and a busy API does not read the database for every request. */
+  killSwitchCacheMs: 5000,
+  /** The most the proxy waits for the flag. Past it the last known value is used: a slow database must not stall every request. */
+  killSwitchReadTimeoutMs: 1500,
+  /** The reason an administrator gives for a switch or a suspension: 10 to 200 characters after trimming. */
+  reasonMin: 10,
+  reasonMax: 200,
+} as const;

@@ -238,12 +238,15 @@ describe("AdminSidebar", () => {
     expect(view()).not.toContain("aria-current");
   });
 
-  it("links REDACT and still shows the kill switch as a disabled item with no link", () => {
+  it("links REDACT and KILL SWITCH, and has no disabled items left", () => {
     const markup = view();
     expect(markup).toMatch(/<a[^>]*href="\/admin\/redact"[^>]*>REDACT/);
-    expect(markup).toContain("KILL SWITCH");
-    expect(markup.split('aria-disabled="true"').length - 1).toBe(1);
-    expect(markup).not.toMatch(/href="[^"]*kill/);
+    expect(markup).toMatch(/<a[^>]*href="\/admin\/kill-switch"[^>]*>KILL SWITCH/);
+    expect(markup).not.toContain('aria-disabled="true"');
+  });
+
+  it("marks KILL SWITCH as the current page when it is", () => {
+    expect(render(<AdminSidebar operatorName="Ada" current="killswitch" />)).toMatch(/<a[^>]*aria-current="page"[^>]*>KILL SWITCH/);
   });
 
   it("marks REDACT as the current page when it is", () => {

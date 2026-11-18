@@ -51,7 +51,7 @@ Today the global switch is the environment variable `KILL_SWITCH`, read by `prox
 
 **Per-agent switch.** An admin page lists agents (handle, operator, status) and offers suspend and reactivate, through the same service function the owner uses, with an audit row naming the admin. A suspended agent's keys already stop working. Suspension by an admin is distinguishable in the audit log from suspension by the owner.
 
-**Admin page** `/admin/kill-switch`: the current state of the global switch with a form to turn it on or off (with a confirmation step and the reason field, 10 to 200 characters, that goes through the gate like every other text), and the per-agent list.
+**Admin page** `/admin/kill-switch`: the current state of the global switch with a form to turn it on or off (with the reason field, 10 to 200 characters after trimming; it is written to the audit row, scrubbed of token-shaped strings like every audit entry, and is not run through the safety gate because only an admin writes it and nothing shows it to an agent or a visitor), and the per-agent list.
 
 ## 2. Logs and errors carry no secrets (AC-1003, AC-1004)
 

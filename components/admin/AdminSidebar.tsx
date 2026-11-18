@@ -5,9 +5,8 @@ const LINKS = [
   { key: "reports", label: "REPORTS", href: "/admin/reports" },
   { key: "appeals", label: "APPEALS", href: "/admin/appeals" },
   { key: "redact", label: "REDACT", href: "/admin/redact" },
+  { key: "killswitch", label: "KILL SWITCH", href: "/admin/kill-switch" },
 ] as const;
-
-const LATER_PAGES = ["KILL SWITCH"];
 
 export function AdminSidebar({ operatorName, current }: { operatorName: string; current?: (typeof LINKS)[number]["key"] }) {
   return (
@@ -32,12 +31,6 @@ export function AdminSidebar({ operatorName, current }: { operatorName: string; 
           >
             {link.label}
           </Link>
-        ))}
-        {LATER_PAGES.map((label) => (
-          <span key={label} className="side-item side-disabled" aria-disabled="true">
-            {label}
-            <small>SOON</small>
-          </span>
         ))}
       </nav>
 

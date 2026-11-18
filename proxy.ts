@@ -1,16 +1,17 @@
 import { getSessionCookie } from "better-auth/cookies";
 import { NextResponse, type NextRequest } from "next/server";
-import { getServerEnv } from "@/lib/config/env";
 import { errorResponse } from "@/lib/http/errors";
+import { isKillSwitchOn } from "@/lib/http/killSwitchRuntime";
 import { decideProxyAction } from "@/lib/http/proxyPolicy";
 
 // The decision lives in lib/http/proxyPolicy.ts (tested). A session cookie is only a cheap check:
-// real validation happens in getOperator() inside each page or action.
-export function proxy(request: NextRequest) {
+// real validation happens in getOperator() inside each page or action. The kill switch is the environment switch or
+// the database flag an administrator sets at /admin/kill-switch (N10); the reader caches it for a few seconds.
+export async function proxy(request: NextRequest) {
   const action = decideProxyAction({
     pathname: request.nextUrl.pathname,
     hasSessionCookie: Boolean(getSessionCookie(request)),
-    killSwitch: getServerEnv().killSwitch,
+    killSwitch: await isKillSwitchOn(),
   });
   if (action === "kill_switch") return errorResponse("kill_switch");
   if (action === "redirect_login") return NextResponse.redirect(new URL("/auth/login", request.url));

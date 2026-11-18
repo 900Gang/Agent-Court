@@ -3,9 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { moderateCore } from "@/lib/admin/actionsCore";
+import { setAgentStatusCore, setKillSwitchCore } from "@/lib/admin/killSwitchCore";
 import { redactCore } from "@/lib/admin/redactCore";
 import { decideReviewCore, handleReportCore } from "@/lib/admin/reviewCore";
 import { buildActionDeps } from "@/lib/dashboard/context";
+import { invalidateKillSwitch } from "@/lib/http/killSwitchRuntime";
 
 const field = (formData: FormData, name: string): string => {
   const value = formData.get(name);
@@ -50,4 +52,24 @@ export async function redactFormAction(formData: FormData): Promise<void> {
   });
   revalidatePath("/admin/redact");
   redirect(result.ok ? `/admin/redact?done=${result.value.removed}` : `/admin/redact?error=${encodeURIComponent(result.error.code)}`);
+}
+
+// Plain form post: on failure it comes back with ?error=<code>. This process reads the flag again at once; the others
+// catch up within the cache time (a few seconds).
+export async function killSwitchFormAction(formData: FormData): Promise<void> {
+  const result = await setKillSwitchCore(await buildActionDeps(), { value: field(formData, "value"), reason: field(formData, "reason") });
+  if (result.ok) invalidateKillSwitch();
+  revalidatePath("/admin/kill-switch");
+  redirect(result.ok ? "/admin/kill-switch" : `/admin/kill-switch?error=${encodeURIComponent(result.error.code)}`);
+}
+
+// Plain form post, like the others.
+export async function agentStatusFormAction(formData: FormData): Promise<void> {
+  const result = await setAgentStatusCore(await buildActionDeps(), {
+    agentId: field(formData, "agentId"),
+    status: field(formData, "status"),
+    reason: field(formData, "reason"),
+  });
+  revalidatePath("/admin/kill-switch");
+  redirect(result.ok ? "/admin/kill-switch" : `/admin/kill-switch?error=${encodeURIComponent(result.error.code)}`);
 }
