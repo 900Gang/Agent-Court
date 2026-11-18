@@ -26,6 +26,8 @@ export interface ServerEnv {
   resendApiKey: string | null;
   /** The sender address for operator email, as `name@host` or `Name <name@host>`. */
   emailFrom: string | null;
+  /** Where the alert check sends its emails. Null when unset: the check then runs and sends nothing. Needs the email settings. */
+  alertEmail: string | null;
 }
 
 export class EnvError extends Error {
@@ -51,6 +53,7 @@ const KEYS = [
   "OPENAI_API_KEY",
   "RESEND_API_KEY",
   "EMAIL_FROM",
+  "ALERT_EMAIL",
 ] as const;
 
 // A bare address or a named one. A looser check would let a typo through to the provider.
@@ -76,6 +79,7 @@ const schema = z
     OPENAI_API_KEY: z.string().min(1).optional(),
     RESEND_API_KEY: z.string().min(1).optional(),
     EMAIL_FROM: z.string().regex(SENDER_ADDRESS).optional(),
+    ALERT_EMAIL: z.email().optional(),
   })
   .superRefine((env, ctx) => {
     if (env.APP_ENV === "production" && !env.BETTER_AUTH_URL.startsWith("https://")) {
@@ -127,6 +131,11 @@ const schema = z
       [env.EMAIL_FROM !== undefined, env.RESEND_API_KEY !== undefined, "RESEND_API_KEY"],
     ] as const) {
       if (present && !other) ctx.addIssue({ code: "custom", path: [name], message: "required together" });
+    }
+
+    // An alert address with no way to send to it is a mistake, not a setting.
+    if (env.ALERT_EMAIL !== undefined && (env.RESEND_API_KEY === undefined || env.EMAIL_FROM === undefined)) {
+      ctx.addIssue({ code: "custom", path: ["ALERT_EMAIL"], message: "needs RESEND_API_KEY and EMAIL_FROM" });
     }
 
     // The re-scan endpoint is open to anyone without it, so a deployed app must have one.
@@ -201,6 +210,7 @@ export function parseServerEnv(source: Record<string, string | undefined>): Serv
     openAiApiKey: env.OPENAI_API_KEY ?? null,
     resendApiKey: env.RESEND_API_KEY ?? null,
     emailFrom: env.EMAIL_FROM ?? null,
+    alertEmail: env.ALERT_EMAIL ?? null,
   };
 }
 

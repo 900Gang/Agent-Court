@@ -180,8 +180,12 @@ export const OPS = {
   reasonMax: 200,
   /** How long the hourly request counters live in Redis. Longer than the seven days the metrics page shows. */
   counterTtlDays: 8,
-  /** How many rows of the scheduled-run record are kept. The cron wrapper deletes older ones after each run. */
-  scheduledRunsKept: 500,
+  /**
+   * How many rows of the scheduled-run record are kept for each route. The wrapper deletes older rows of the same route
+   * after each run. The count is per route so that a route that runs rarely keeps its last success however often the busy
+   * ones run.
+   */
+  scheduledRunsKept: 100,
   /**
    * The scheduled routes and the expected gap between runs, in minutes. vercel.json carries the schedule; the alert
    * check calls a route missed when it has no successful run within twice its gap.
@@ -197,3 +201,21 @@ export const OPS = {
 } as const;
 
 export type CronRoute = keyof typeof OPS.cronJobs;
+
+/**
+ * The alert rules (N10, AC-1006). The window for the first two is the current clock hour and the one before it, because
+ * the request counters are kept by the hour; the flag rate uses the same window so the two agree. Tuned after the first
+ * week of real traffic.
+ */
+export const ALERTS = {
+  /** Flag rate: at least this many texts screened for injection, and at least this share flagged or blocked. */
+  flagMinScreened: 20,
+  flagMinShare: 0.3,
+  /** 429 rate: at least this many authenticated API requests, and at least this share answered 429. */
+  rateMinRequests: 100,
+  rateMinShare: 0.2,
+  /** After an alert for a rule, the same rule stays quiet for this long. */
+  cooldownMinutes: 60,
+  /** A route is missed when it has no success within this many times its normal gap. */
+  missedFactor: 2,
+} as const;

@@ -86,7 +86,7 @@ export async function loadCronStatus(db: Database, now: Date): Promise<CronStatu
     .select({ route: cronRuns.route, ok: cronRuns.ok })
     .from(cronRuns)
     .orderBy(desc(cronRuns.finishedAt), desc(cronRuns.id))
-    .limit(OPS.scheduledRunsKept);
+    .limit(Object.keys(OPS.cronJobs).length * OPS.scheduledRunsKept);
 
   const runAt = new Map(lastRuns.map((row) => [row.route, row.at]));
   const okAt = new Map(lastOks.map((row) => [row.route, row.at]));

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   handleCronAutoClose,
+  handleCronHealthCheck,
   handleCronReembed,
   handleCronReleaseReputation,
   handleCronReminders,
@@ -43,6 +44,7 @@ const HANDLERS: Array<[string, string, (request: Request, d: CronDeps) => Promis
   ["auto-close", "auto-close", handleCronAutoClose],
   ["release-reputation", "release-reputation", handleCronReleaseReputation],
   ["reminders", "reminders", handleCronReminders],
+  ["health-check", "health-check", handleCronHealthCheck],
 ];
 
 describe.each(HANDLERS)("the %s route", (_name, route, handler) => {
@@ -84,5 +86,20 @@ describe("the routes that can be switched off by a setting", () => {
     const [row] = await runs();
     expect(row.ok).toBe(true);
     expect(row.counts).toMatchObject({ disabled: true });
+  });
+});
+
+describe("the health-check route", () => {
+  it("records a run with disabled: true when nothing can be sent", async () => {
+    await handleCronHealthCheck(authed(), deps({ mailer: null, alertTo: null }));
+    const [row] = await runs();
+    expect(row.route).toBe("health-check");
+    expect(row.counts).toMatchObject({ disabled: true, findings: 0, sent: 0 });
+  });
+
+  it("answers with counts only", async () => {
+    const body = await (await handleCronHealthCheck(authed(), deps())).json();
+    expect(Object.keys(body).sort()).toEqual(["coolingDown", "disabled", "failed", "findings", "sent"]);
+    for (const value of Object.values(body)) expect(["number", "boolean"]).toContain(typeof value);
   });
 });

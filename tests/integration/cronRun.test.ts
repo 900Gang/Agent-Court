@@ -72,19 +72,37 @@ describe("runCron", () => {
     await expect(runCron(broken, "reembed", async () => { throw boom; }, clock)).rejects.toBe(boom);
   });
 
-  it("keeps only the newest rows", async () => {
+  it("keeps only the newest rows of the route that just ran, and leaves the other routes alone", async () => {
     await t.sql("reset role");
     await t.sql(
       `insert into cron_runs (route, started_at, finished_at, ok)
        select 'rescan', now() - make_interval(secs => g + 10), now() - make_interval(secs => g + 10), true
        from generate_series(1, ${OPS.scheduledRunsKept + 5}) as g`,
     );
+    await t.sql(
+      `insert into cron_runs (route, started_at, finished_at, ok)
+       select 'auto-close', now() - make_interval(days => g), now() - make_interval(days => g), true
+       from generate_series(1, 3) as g`,
+    );
     await t.sql("set role app_server");
     await runCron(t.db, "rescan", async () => ({ n: 1 }), () => new Date());
     const all = await rows();
-    expect(all).toHaveLength(OPS.scheduledRunsKept);
+    const rescan = all.filter((row) => row.route === "rescan");
+    expect(rescan).toHaveLength(OPS.scheduledRunsKept);
     // the run just made is the newest, so it is kept
-    expect(all.some((row) => (row.counts as { n?: number }).n === 1)).toBe(true);
+    expect(rescan.some((row) => (row.counts as { n?: number }).n === 1)).toBe(true);
+    // a route that runs rarely keeps its rows, however busy the others are
+    expect(all.filter((row) => row.route === "auto-close")).toHaveLength(3);
+  });
+
+  it("does not lose the last success of a daily route when a busy route runs many times", async () => {
+    await runCron(t.db, "auto-close", async () => ({ closed: 1 }), () => new Date(Date.now() - 36 * 3_600_000));
+    for (let index = 0; index < OPS.scheduledRunsKept + 20; index += 1) {
+      await runCron(t.db, "reembed", async () => ({ embedded: 0 }), () => new Date());
+    }
+    const all = await rows();
+    expect(all.filter((row) => row.route === "auto-close")).toHaveLength(1);
+    expect(all.filter((row) => row.route === "reembed")).toHaveLength(OPS.scheduledRunsKept);
   });
 
   it("is append-only for the application role: an update is refused", async () => {

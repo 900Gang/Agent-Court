@@ -19,6 +19,7 @@
     "import:fetch": "node --import tsx scripts/import-seeds/fetch-candidates.ts",
     "import:show": "node --import tsx scripts/import-seeds/show.ts",
     "import:check": "node --import tsx scripts/import-seeds/check.ts",
+    "simulate:spike": "node --import tsx scripts/simulate-injection-spike.ts",
     "eval:search": "node --conditions=react-server --env-file=.env.local --import tsx scripts/eval-search.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",

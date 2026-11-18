@@ -6,8 +6,11 @@ import type { EmbeddingProvider } from "@/lib/embeddings/provider";
 import { getEmbeddingProvider } from "@/lib/embeddings/server";
 import type { EmailProvider } from "@/lib/email/provider";
 import { getEmailProvider } from "@/lib/email/server";
+import type { Counters } from "@/lib/metrics/counters";
+import { getCounters } from "@/lib/metrics/server";
 import { createGate } from "@/lib/safety/engine";
 import type { SafetyGate } from "@/lib/safety/gate";
+import { runHealthCheck } from "@/lib/services/alertService";
 import { reembedStale } from "@/lib/services/embeddingService";
 import { closeIdleCases } from "@/lib/services/lifecycleService";
 import { sendDueNotices } from "@/lib/services/notificationService";
@@ -18,11 +21,11 @@ import { runCron } from "../cronRun";
 import { verifyCronRequest } from "../cronAuth";
 import { errorResponse } from "../errors";
 
-export type CronDeps = { db: Database; gate: SafetyGate; secret: string | null; embedder?: EmbeddingProvider | null; /** The mail provider. Null or absent: no email is sent. */ mailer?: EmailProvider | null; /** The site's own address, for links in email. */ baseUrl?: string; /** The time the jobs use. Absent in production; tests set it. */ now?: Date };
+export type CronDeps = { db: Database; gate: SafetyGate; secret: string | null; embedder?: EmbeddingProvider | null; /** The mail provider. Null or absent: no email is sent. */ mailer?: EmailProvider | null; /** The site's own address, for links in email. */ baseUrl?: string; /** The time the jobs use. Absent in production; tests set it. */ now?: Date; /** The request counters, for the alert check. Null or absent: the 429 rule is skipped. */ counters?: Counters | null; /** The alert address. Null or absent: the alert check sends nothing. */ alertTo?: string | null };
 
 /** The real wiring for the cron route files. */
 export function getCronDeps(): CronDeps {
-  return { db: getDb(), gate: createGate(), secret: getServerEnv().cronSecret, embedder: getEmbeddingProvider(), mailer: getEmailProvider(), baseUrl: getServerEnv().betterAuthUrl };
+  return { db: getDb(), gate: createGate(), secret: getServerEnv().cronSecret, embedder: getEmbeddingProvider(), mailer: getEmailProvider(), baseUrl: getServerEnv().betterAuthUrl, counters: getCounters(), alertTo: getServerEnv().alertEmail };
 }
 
 const BATCH = 100;
@@ -96,5 +99,25 @@ export async function handleCronReminders(request: Request, deps: CronDeps): Pro
     const done = await sendDueNotices(deps.db, mailer, deps.now ?? new Date(), { baseUrl, limit: LIFECYCLE.cronBatch });
     return { disabled: false, ...done };
   });
+  return jsonResponse(200, summary);
+}
+
+/**
+ * GET or POST /api/cron/health-check. The secret is checked first, and every refusal is the same fixed 401. A correct call
+ * applies the three alert rules (flag rate, 429 rate, a missed scheduled route) to the current numbers and emails one
+ * message for each rule that fires and is not cooling down. It answers with counts only. With no alert address, mail
+ * provider or site address it answers 200 with `disabled: true` and sends nothing.
+ */
+export async function handleCronHealthCheck(request: Request, deps: CronDeps): Promise<Response> {
+  if (!verifyCronRequest(request, deps.secret)) return errorResponse("unauthorized");
+  const summary = await runCron(deps.db, "health-check", () =>
+    runHealthCheck(deps.db, {
+      counters: deps.counters ?? null,
+      mailer: deps.mailer ?? null,
+      to: deps.alertTo ?? null,
+      baseUrl: deps.baseUrl ?? null,
+      ...(deps.now ? { now: deps.now } : {}),
+    }),
+  );
   return jsonResponse(200, summary);
 }

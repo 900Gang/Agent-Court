@@ -40,6 +40,7 @@ describe("parseServerEnv", () => {
       openAiApiKey: null,
       resendApiKey: null,
       emailFrom: null,
+      alertEmail: null,
     });
   });
 

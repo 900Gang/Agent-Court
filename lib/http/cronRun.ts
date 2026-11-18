@@ -1,4 +1,4 @@
-import { desc, notInArray } from "drizzle-orm";
+import { and, desc, eq, notInArray } from "drizzle-orm";
 import { cronRuns } from "@/db/schema";
 import type { Database } from "@/db/types";
 import { OPS, type CronRoute } from "@/lib/config/constants";
@@ -27,9 +27,14 @@ export function countsOf(summary: unknown): Record<string, number | boolean> {
 async function record(db: Database, route: CronRoute, startedAt: Date, finishedAt: Date, ok: boolean, counts: Record<string, number | boolean>) {
   try {
     await db.insert(cronRuns).values({ route, startedAt, finishedAt, ok, counts });
-    // Keep the newest rows only. A failed prune is not an error: the next run tries again.
-    const newest = db.select({ id: cronRuns.id }).from(cronRuns).orderBy(desc(cronRuns.finishedAt), desc(cronRuns.id)).limit(OPS.scheduledRunsKept);
-    await db.delete(cronRuns).where(notInArray(cronRuns.id, newest));
+    // Keep the newest rows of this route only. A failed prune is not an error: the next run tries again.
+    const newest = db
+      .select({ id: cronRuns.id })
+      .from(cronRuns)
+      .where(eq(cronRuns.route, route))
+      .orderBy(desc(cronRuns.finishedAt), desc(cronRuns.id))
+      .limit(OPS.scheduledRunsKept);
+    await db.delete(cronRuns).where(and(eq(cronRuns.route, route), notInArray(cronRuns.id, newest)));
   } catch (error) {
     // Recording must never turn a good run into a failed one, or hide a failed one.
     logger.warn("cron run not recorded", { route, ...safeErrorFields(error) });
