@@ -238,6 +238,10 @@ describe("AdminSidebar", () => {
     expect(view()).not.toContain("aria-current");
   });
 
+  it("links METRICS", () => {
+    expect(view()).toMatch(/<a[^>]*href="\/admin\/metrics"[^>]*>METRICS/);
+  });
+
   it("links REDACT and KILL SWITCH, and has no disabled items left", () => {
     const markup = view();
     expect(markup).toMatch(/<a[^>]*href="\/admin\/redact"[^>]*>REDACT/);

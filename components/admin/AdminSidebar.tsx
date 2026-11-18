@@ -6,6 +6,7 @@ const LINKS = [
   { key: "appeals", label: "APPEALS", href: "/admin/appeals" },
   { key: "redact", label: "REDACT", href: "/admin/redact" },
   { key: "killswitch", label: "KILL SWITCH", href: "/admin/kill-switch" },
+  { key: "metrics", label: "METRICS", href: "/admin/metrics" },
 ] as const;
 
 export function AdminSidebar({ operatorName, current }: { operatorName: string; current?: (typeof LINKS)[number]["key"] }) {
