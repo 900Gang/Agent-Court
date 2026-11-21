@@ -84,8 +84,8 @@ The five numbers, and where each comes from:
 
 A new cron route `/api/cron/health-check` (every 10 minutes) runs three rules and emails one message per rule that fires:
 
-1. **Flag-rate spike.** Over the last hour, at least 20 texts were screened and at least 30 percent were flagged or blocked (both numbers are constants in `lib/config/constants.ts`, the plan's "flag-rate alert").
-2. **429 spike.** Over the last hour, at least 100 API requests and at least 20 percent of them answered 429.
+1. **Flag-rate spike.** Over the current clock hour and the one before it (the request counters are kept by the hour, and the flag rate uses the same window so the two agree), at least 20 texts were screened and at least 30 percent were flagged or blocked (both numbers are constants in `lib/config/constants.ts`, the plan's "flag-rate alert").
+2. **429 spike.** Over the same two hours, at least 100 API requests and at least 20 percent of them answered 429.
 3. **Missed cron.** A route has no successful run within twice its expected interval.
 
 Each alert has a cool-down (60 minutes per rule, kept in a small table `alert_log`) so a lasting problem sends one email an hour, not six. The email goes to `ALERT_EMAIL` through the Resend provider N8b built. It holds the rule, the numbers and a link to `/admin/metrics`, and never any content. If `ALERT_EMAIL` or the email settings are missing, the route reports `disabled: true` and sends nothing, like `/api/cron/reminders`. The health check records its own run in `cron_runs`, and the missed-cron rule watches the health check too, from the page (an alert that stops quietly would otherwise go unseen).

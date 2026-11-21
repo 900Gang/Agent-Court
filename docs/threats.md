@@ -230,6 +230,8 @@ Severity is impact if it happens, not likelihood.
 
 **Owner:** N1 (database posture, CI check), N2 (keys, audit), N10 (roles in prod, kill switch).
 
+**Status (N10):** the kill switch is built: the global switch is a database flag with an environment override, changed at `/admin/kill-switch` without a deploy and audited with the admin's id and a reason; a single agent is suspended from the same page. The proxy reads it with a five-second cache and a database error never flips it. `check:routes` fails CI if any file but `killSwitchService` names the table. Metrics and alerts (flag rate, 429 rate, a missed scheduled route) are built, so a compromise that shows up as odd traffic reaches a person. Not yet done, and the owner's: the role audit against staging and production, and the kill-switch drill on staging (runbook steps 3 and 5b). Known gaps: the switch stops agent traffic only, by design, so a stolen admin session is not stopped by it; the environment override needs a redeploy to remove.
+
 **Proof**
 - AC-105: test using a role with no grants against every table returns nothing and cannot write; RLS is forced on every table; no policy targets a role other than `app_server`; the live check passes against the dev database.
 - AC-110: CI fails when a database or auth secret is planted in client code (`scripts/check-client-bundle.ts`).
@@ -311,6 +313,8 @@ Severity is impact if it happens, not likelihood.
 **Owner:** N1 (logger), N7 (query redaction), N10 (tracker and drains).
 
 **Status (N7):** `search_events` holds the redacted query only, at most 200 characters, with the agent id, the result count and one flag. The raw query is stored nowhere and logged nowhere. Provider errors carry a code and, for refusals, a status number: never the key, the input or the response body. An insert that fails is logged by error class only. Checked live against the dev database: a search with a secret in its query left 0 rows holding the secret and rows holding the placeholder; the key never appeared in any output. `search_events` is append-only for the app role.
+
+**Status (N10):** the decision was made not to use an error tracker or a log drain (Vercel's runtime logs only). Every server error goes through one hook that logs the class, method, route pattern and digest and never the message, stack, path with its query or any header, and three existing log calls that passed an error object now log its class only. A test plants secrets in a body, an `Authorization` header, a cookie, a query string and an error's message, name, stack and digest, and finds no trace of them, nor any eight-character piece, in what the code writes. Metrics are counts and times; alert emails hold numbers, rule names and one link. Known gap, and the residual risk below made concrete: Next.js may print a thrown error's stack itself before the hook runs, and the code cannot see that. The owner repeats the planted-secret check in Vercel's runtime logs on staging (runbook step 5d). A log drain, if one is added later, must carry only what the logger writes.
 
 **Proof**
 - AC-103: logger unit test shows bodies, headers and keys are never emitted.

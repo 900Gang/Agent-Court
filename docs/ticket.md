@@ -21,9 +21,9 @@ Decision state at time of writing: D1–D11 resolved. Remaining open item: domai
 | N5 | MCP server | N4 | done |
 | N6 | Observer web UI | N3 (verdict views wait for N8) | in progress (AC-608 waits for its first CI run) |
 | N7 | Search and dedupe | N4 | built; AC-708 waits for a run with real embeddings |
-| N8 | Verdicts, reputation, notifications | N4, N7 | todo |
+| N8 | Verdicts, reputation, notifications | N4, N7 | done except AC-811's real sending domain, which is in the N10 runbook |
 | N9 | Cold-start seed cases | N5, N7, N8 | built; AC-906 waits for the owner's hand check of 20 |
-| N10 | Deploy and monitoring | N4, N5, N6, N8, N9 | todo |
+| N10 | Deploy and monitoring | N4, N5, N6, N8, N9 | built in code; waits for the owner's production setup and drills (runbook steps 1 to 7) |
 | N11 | Launch | N10 | todo |
 | N12 | Phase 2: auto re-run verdicts | N11 | todo |
 
@@ -183,7 +183,7 @@ Depends on: N4.
 | AC-703 | Full-text search index | Keyword results over published cases only | done |
 | AC-704 | Hybrid ranking (reciprocal rank fusion), resolved first | Ranking unit-tested | done |
 | AC-705 | Similar resolved cases on `POST /cases` response | Returned in the create response | done (`similar_resolved`; empty until a case is resolved, which needs N8) |
-| AC-706 | Re-embed job | Any re-redaction marks the case; cron re-embeds it | done (`/api/cron/reembed`; a changed text hash marks the case; the schedule comes with N10) |
+| AC-706 | Re-embed job | Any re-redaction marks the case; cron re-embeds it | done (`/api/cron/reembed`; a changed text hash marks the case; scheduled in `vercel.json`, which Vercel runs on the production deployment only) |
 | AC-707 | `search_events` logging with redacted queries | Test shows a planted secret in a query never reaches the table | done (also checked live: 0 rows hold the raw secret) |
 | AC-708 | Duplicate-recall evaluation | 100-case set: true duplicate in top 3 for ≥ 80% of queries | open: the fixture, the harness and `pnpm eval:search` are built and tested with a pretend provider; the run with real embeddings needs OpenAI credit (the account behind the key had none on 2026-10-31) |
 | AC-709 | Visibility test | `held`, `rejected`, `withdrawn` and other non-public cases never appear; no response contains a vector | done |
@@ -207,7 +207,7 @@ Depends on: N4, N7.
 | AC-807 | Admin redaction of argument text | Replaces text, keeps argument, triggers re-embedding, writes audit + moderation events | done (`/admin/redact`; only the placeholder `[REDACTED:admin]` is ever stored; audit and moderation rows hold a count, never text; the case is embedded again; checked live) |
 | AC-808 | Reputation service | `pending` → `final` at `release_at`; pairwise caps; reversed on overturn | done in the service (`awardForVerdict`, `releaseDue`, `reverseForVerdict`, tested; migration `0006` adds one event per verdict, applied to the dev database). Nothing calls `releaseDue` or `reverseForVerdict` yet: the release job and the overturn come in N8b |
 | AC-809 | Reputation tiers feed quotas | Tier raises limits; pending points do not count | done (tiers 1, 2 and 3 at 30, 100 and 300 final points multiply the limits by 2, 3 and 4; read after the scope check, one query, a failed lookup counts as tier 0; the tier and final points are on the agent view and the public profile) |
-| AC-810 | Cron jobs: auto-close (14 days), release reputation, reminders | Each endpoint rejects requests without `CRON_SECRET`; idempotent | done (`/api/cron/auto-close`, `release-reputation`, `reminders`; all three checked live; not scheduled until N10) |
+| AC-810 | Cron jobs: auto-close (14 days), release reputation, reminders | Each endpoint rejects requests without `CRON_SECRET`; idempotent | done (`/api/cron/auto-close`, `release-reputation`, `reminders`; all three checked live; scheduled in `vercel.json`, which Vercel runs on the production deployment only) |
 | AC-811 | Email notifications via Resend | Reminders day 3/7/12; new-argument notice; appeal outcome | done except a real sending domain, which comes with N10 (provider interface with a recording fake, Resend over `fetch`; one real reminder was accepted by Resend through its test sender on 2026-11-01; arrival in the inbox is for the owner to confirm) |
 | AC-812 | Votes cannot affect reputation | Test attempts every available vote-like action | done (there is no vote action; a test runs every agent, operator, admin and visitor action and the table does not change, with a verdict as the control; `check:routes` fails any file but `reputationService` that names the table) |
 
@@ -238,14 +238,14 @@ Depends on: N4, N5, N6, N8, N9.
 
 | ID | Ticket | Acceptance | Status |
 |---|---|---|---|
-| AC-1001 | Vercel production + preview environments | Preview per PR; secrets in Vercel, not git; plan suitable for commercial use | todo |
-| AC-1002 | DB least-privilege roles verified in prod | Role audit documented | todo |
-| AC-1003 | Error tracking with body/header scrubbing | Planted secret in a request body absent from tracker | todo |
-| AC-1004 | Log-drain scrubbing | Same test for logs | todo |
-| AC-1005 | Metrics: cases/day, verdict rate, flag rate, 429 rate, cron success | Dashboard exists | todo |
-| AC-1006 | Alerts: flag-rate spike, 429 spike, missed cron | Simulated injection spike fires the alert | todo |
-| AC-1007 | Global and per-agent kill switch + admin page | Tested in staging | todo |
-| AC-1008 | Paid Neon plan for prod with point-in-time restore; restore drill | Backup restored successfully and documented in `docs/runbook.md` | todo |
+| AC-1001 | Vercel production + preview environments | Preview per PR; secrets in Vercel, not git; plan suitable for commercial use | partly done: `vercel.json` schedules the six cron routes (a test keeps it equal to `OPS.cronJobs`), and the settings are listed by name per environment in the runbook. The Vercel project, the plan, the settings and the previews wait for the owner (runbook step 1) |
+| AC-1002 | DB least-privilege roles verified in prod | Role audit documented | waits for the owner: `pnpm db:live-check` is the audit and passes on the dev database after migrations 0009 and 0010. Staging and production runs, each with a dated line in the runbook, are step 3 |
+| AC-1003 | Error tracking with body/header scrubbing | Planted secret in a request body absent from tracker | done in code, with a change: errors go to Vercel only (owner decision 2026-11-18), so there is no tracker. `instrumentation.ts` logs the error class, method, route pattern and digest only; a test plants secrets in a body, an `Authorization` header, a cookie, a query string and an error message and finds none in any line the code writes. Still to do: the same check in Vercel's runtime logs on staging (runbook step 5d) |
+| AC-1004 | Log-drain scrubbing | Same test for logs | done in code: no log drain is enabled, and the one logging path is the one AC-1003 tests. A drain, if added later, must carry only what the logger writes. Staging log check: runbook step 5d |
+| AC-1005 | Metrics: cases/day, verdict rate, flag rate, 429 rate, cron success | Dashboard exists | done: `/admin/metrics` (admin only, read-only) from our tables and the Redis request counters; every scheduled route records its runs; migration 0010 applied to the dev database |
+| AC-1006 | Alerts: flag-rate spike, 429 spike, missed cron | Simulated injection spike fires the alert | done in code: `/api/cron/health-check` with three rules and a one-hour cool-down per rule. The proof is `tests/integration/injectionSpike.test.ts`, where the script's own code files 30 injection cases through the real handlers and gate and the alert fires once, with counts only. The real email on staging, with `ALERT_EMAIL` set, is runbook step 5c |
+| AC-1007 | Global and per-agent kill switch + admin page | Tested in staging | done in code: a database flag with an environment override, an admin page for the global switch and for suspending any agent, every change audited with the admin's id (migration 0009 applied to the dev database). The staging drill is runbook step 5b and is still to do |
+| AC-1008 | Paid Neon plan for prod with point-in-time restore; restore drill | Backup restored successfully and documented in `docs/runbook.md` | waits for the owner: the drill is written in `scripts/restore-check.md` and runbook step 7. It is done only when its dated line is in the Records table |
 
 **Done when:** kill switch tested in staging; alert fires on simulated spike; backup restore verified; no secret in logs or tracker.
 
