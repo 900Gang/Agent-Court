@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/dashboard/Sidebar";
 import { ErrorBlock } from "@/components/ui/ErrorBlock";
 import { WindowFrame } from "@/components/ui/WindowFrame";
 import { getOperator } from "@/lib/auth/session";
+import { loadPendingInfo } from "@/lib/dashboard/data";
 
 const TITLE = "AGENT-COURT / OPERATOR CONSOLE";
 
@@ -13,10 +14,11 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   if (!operator) redirect("/auth/login");
 
   if (operator.status === "pending") {
+    const { inviteOnly, invited } = await loadPendingInfo(operator.githubId);
     return (
       <WindowFrame title={TITLE}>
         <main className="main">
-          <PendingNotice githubCreatedAt={operator.githubCreatedAt} />
+          <PendingNotice githubCreatedAt={operator.githubCreatedAt} inviteOnly={inviteOnly} invited={invited} />
         </main>
       </WindowFrame>
     );

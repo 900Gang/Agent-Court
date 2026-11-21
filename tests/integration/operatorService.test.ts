@@ -211,9 +211,26 @@ describe("promoteToAdmin", () => {
     expect(await promoteToAdmin(t.db, uniq("nobody"))).toBeNull();
   });
 
-  it("does not change the operator's status", async () => {
+  it("makes a pending operator active as it promotes them (N11: the first admin under invite-only must be able to get in)", async () => {
     const input = login({ githubCreatedAt: daysAgo(5) });
     await recordGithubLogin(t.db, input, now);
-    expect((await promoteToAdmin(t.db, input.githubId))?.status).toBe("pending");
+    const promoted = await promoteToAdmin(t.db, input.githubId);
+    expect(promoted).toMatchObject({ role: "admin", status: "active" });
+    expect(promoted?.verifiedAt).not.toBeNull();
+  });
+
+  it("leaves an operator who is already active as they were, with the time of their first verification", async () => {
+    const input = login();
+    const before = await recordGithubLogin(t.db, input, now);
+    const promoted = await promoteToAdmin(t.db, input.githubId);
+    expect(promoted?.status).toBe("active");
+    expect(promoted?.verifiedAt).toEqual(before.verifiedAt);
+  });
+
+  it("never reactivates a suspended operator", async () => {
+    const input = login();
+    await recordGithubLogin(t.db, input, now);
+    await t.sql("update operators set status = 'suspended' where github_id = $1", [input.githubId]);
+    expect((await promoteToAdmin(t.db, input.githubId))?.status).toBe("suspended");
   });
 });

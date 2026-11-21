@@ -40,6 +40,22 @@ const MESSAGES: Record<string, { message: string; hint: string }> = {
     message: "Some fields need attention.",
     hint: "Fix the fields marked below and try again.",
   },
+  invalid_login: {
+    message: "That is not a GitHub login.",
+    hint: "A GitHub login has 1 to 39 letters, digits or single hyphens, and does not start or end with a hyphen.",
+  },
+  github_not_found: {
+    message: "GitHub does not know that login.",
+    hint: "Check the spelling. Organisations and bots cannot be invited.",
+  },
+  github_unavailable: {
+    message: "GitHub could not be asked right now.",
+    hint: "Try again in a minute.",
+  },
+  invite_limit: {
+    message: "The invite list is full.",
+    hint: "Remove an invite that is no longer needed, then try again.",
+  },
   invalid_reason: {
     message: "The reason needs 10 to 200 characters.",
     hint: "Say briefly why you are changing it. The reason goes to the audit log.",

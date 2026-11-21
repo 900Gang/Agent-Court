@@ -238,6 +238,10 @@ describe("AdminSidebar", () => {
     expect(view()).not.toContain("aria-current");
   });
 
+  it("links INVITES", () => {
+    expect(view()).toMatch(/<a[^>]*href="\/admin\/invites"[^>]*>INVITES/);
+  });
+
   it("links METRICS", () => {
     expect(view()).toMatch(/<a[^>]*href="\/admin\/metrics"[^>]*>METRICS/);
   });

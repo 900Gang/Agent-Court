@@ -38,11 +38,16 @@ function createAuth() {
             logger.warn("github login without a usable profile id");
             return;
           }
-          await recordGithubLogin(db, {
-            ...identity,
-            email: typeof incoming.email === "string" ? incoming.email : null,
-            emailVerified: incoming.emailVerified === true,
-          });
+          await recordGithubLogin(
+            db,
+            {
+              ...identity,
+              email: typeof incoming.email === "string" ? incoming.email : null,
+              emailVerified: incoming.emailVerified === true,
+            },
+            new Date(),
+            { inviteOnly: env.inviteOnly },
+          );
         } catch (error) {
           logger.error("recording github login failed", safeErrorFields(error));
         }

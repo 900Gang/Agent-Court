@@ -28,7 +28,9 @@ export type AuditAction =
   | "case.imported"
   | "killswitch.set"
   | "agent.suspended_by_admin"
-  | "agent.reactivated_by_admin";
+  | "agent.reactivated_by_admin"
+  | "invite.added"
+  | "invite.removed";
 
 /**
  * Appends an audit row attributed to an operator, an agent or the system (a scheduled job). Metadata is scrubbed first, so a bearer

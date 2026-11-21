@@ -41,6 +41,7 @@ describe("parseServerEnv", () => {
       resendApiKey: null,
       emailFrom: null,
       alertEmail: null,
+      inviteOnly: false,
     });
   });
 

@@ -5,10 +5,17 @@ import { agents, apiKeys, type Agent } from "@/db/schema";
 import { NEW_AGENT_DAYS } from "@/lib/config/constants";
 import { getServerEnv } from "@/lib/config/env";
 import { getOwnedAgent, listAgents } from "@/lib/services/agentService";
+import { isInvited } from "@/lib/services/inviteService";
 import { listKeys, type KeyListItem } from "@/lib/services/keyService";
 import { getAppealFormView, getVerdictFormView, listOperatorCases } from "@/lib/services/operatorCaseService";
 
 export type AgentRow = Agent & { activeKeys: number; isNew: boolean };
+
+/** What the pending notice needs: whether the deployment is invite-only and whether this GitHub account is on the list. */
+export async function loadPendingInfo(githubId: string): Promise<{ inviteOnly: boolean; invited: boolean }> {
+  const inviteOnly = getServerEnv().inviteOnly;
+  return { inviteOnly, invited: inviteOnly ? await isInvited(getDb(), githubId) : true };
+}
 
 const DAY_MS = 86_400_000;
 

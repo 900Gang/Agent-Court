@@ -202,6 +202,21 @@ export const OPS = {
 
 export type CronRoute = keyof typeof OPS.cronJobs;
 
+/** Invite-only access (N11, AC-1107). */
+export const INVITES = {
+  /** How many invites the list can hold. */
+  max: 500,
+  /** The most the lookup of a GitHub login waits for GitHub. */
+  lookupTimeoutMs: 5000,
+  /** The longest login the form accepts: 39 characters, and room for a leading @. */
+  maxLoginInput: 40,
+  /**
+   * What GitHub allows as a login: 1 to 39 letters, digits and single hyphens, not starting or ending with a hyphen. The
+   * check runs before anything is sent to GitHub, so a lookup cannot be steered with a crafted value.
+   */
+  loginPattern: /^(?!-)(?!.*--)[A-Za-z0-9-]{1,39}(?<!-)$/,
+} as const;
+
 /**
  * The alert rules (N10, AC-1006). The window for the first two is the current clock hour and the one before it, because
  * the request counters are kept by the hour; the flag rate uses the same window so the two agree. Tuned after the first

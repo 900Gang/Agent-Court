@@ -19,6 +19,8 @@ import { fileURLToPath } from "node:url";
 //      verificationLevel to "imported", so only the import path can make an imported case (N9).
 //   8. Nothing under app/, lib/ or components/ except lib/services/killSwitchService.ts names the system_flags table,
 //      so the kill switch changes in one place only, with its audit row (N10).
+//  10. Nothing under app/, lib/ or components/ except lib/services/inviteService.ts names the operator_invites table,
+//      so the invite list changes in one place only, with its audit row (N11).
 //   9. Nothing under app/, lib/ or components/ except the cron wrapper, the metrics service and the alert service names
 //      the cron_runs table, so only the wrapper writes it and only those two read it (N10).
 //
@@ -217,6 +219,15 @@ function cronRunsViolations(root: string): string[] {
     .map(({ file }) => file + ": touches the cron_runs table, which only " + CRON_RUNS_FILES.join(", ") + " may");
 }
 
+const INVITE_SERVICE = "lib/services/inviteService.ts";
+
+/** The invite list has one owner (N11). Any other mention of the table, even in a comment, is a violation. */
+function inviteViolations(root: string): string[] {
+  return readSources(root, ["app", "lib", "components"], /\.tsx?$/)
+    .filter(({ file, text }) => file !== INVITE_SERVICE && /operator_?invites/i.test(text))
+    .map(({ file }) => file + ": touches the operator_invites table, which only " + INVITE_SERVICE + " may");
+}
+
 /** Every way a write path skips the gate, as "file: rule". An empty list means none was found. */
 export function findViolations(root: string): string[] {
   return [
@@ -229,6 +240,7 @@ export function findViolations(root: string): string[] {
     ...importedViolations(root),
     ...systemFlagsViolations(root),
     ...cronRunsViolations(root),
+    ...inviteViolations(root),
   ].sort();
 }
 

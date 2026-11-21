@@ -78,6 +78,13 @@
       "when": 1795012852568,
       "tag": "0010_n10_cron_runs_alerts",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795275300185,
+      "tag": "0011_n11_invites",
+      "breakpoints": true
     }
   ]
 }

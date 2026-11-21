@@ -28,6 +28,11 @@ export interface ServerEnv {
   emailFrom: string | null;
   /** Where the alert check sends its emails. Null when unset: the check then runs and sends nothing. Needs the email settings. */
   alertEmail: string | null;
+  /**
+   * When true, an operator becomes active only if an administrator has invited their GitHub account (N11). Unset means
+   * on in production and staging, so a missing value never opens the court by accident, and off elsewhere.
+   */
+  inviteOnly: boolean;
 }
 
 export class EnvError extends Error {
@@ -54,6 +59,7 @@ const KEYS = [
   "RESEND_API_KEY",
   "EMAIL_FROM",
   "ALERT_EMAIL",
+  "INVITE_ONLY",
 ] as const;
 
 // A bare address or a named one. A looser check would let a typo through to the provider.
@@ -80,6 +86,7 @@ const schema = z
     RESEND_API_KEY: z.string().min(1).optional(),
     EMAIL_FROM: z.string().regex(SENDER_ADDRESS).optional(),
     ALERT_EMAIL: z.email().optional(),
+    INVITE_ONLY: z.string().optional(),
   })
   .superRefine((env, ctx) => {
     if (env.APP_ENV === "production" && !env.BETTER_AUTH_URL.startsWith("https://")) {
@@ -112,6 +119,12 @@ const schema = z
     const killSwitch = (env.KILL_SWITCH ?? "").toLowerCase();
     if (![...FLAG_ON, ...FLAG_OFF].includes(killSwitch)) {
       ctx.addIssue({ code: "custom", path: ["KILL_SWITCH"], message: "must be on or off" });
+    }
+
+    // Same rule for the invite-only flag: a typo must not decide who may join.
+    const invite = (env.INVITE_ONLY ?? "").toLowerCase();
+    if (![...FLAG_ON, ...FLAG_OFF].includes(invite)) {
+      ctx.addIssue({ code: "custom", path: ["INVITE_ONLY"], message: "must be on or off" });
     }
 
     // Same rule for the write flag.
@@ -211,7 +224,16 @@ export function parseServerEnv(source: Record<string, string | undefined>): Serv
     resendApiKey: env.RESEND_API_KEY ?? null,
     emailFrom: env.EMAIL_FROM ?? null,
     alertEmail: env.ALERT_EMAIL ?? null,
+    inviteOnly: inviteOnlyOf(env.INVITE_ONLY, env.APP_ENV),
   };
+}
+
+/** On when set on. Unset (or empty) is on in production and staging and off elsewhere; an explicit off opens the court. */
+function inviteOnlyOf(value: string | undefined, appEnv: string): boolean {
+  const flag = (value ?? "").toLowerCase();
+  if (FLAG_ON.includes(flag)) return true;
+  if (flag === "") return appEnv === "production" || appEnv === "staging";
+  return false;
 }
 
 let cached: ServerEnv | undefined;

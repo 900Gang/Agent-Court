@@ -1,6 +1,7 @@
-import { and, eq, isNull, or } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { account, operators, type Operator } from "@/db/schema";
 import type { Database } from "@/db/types";
+import { isInvited } from "./inviteService";
 
 export const MIN_GITHUB_ACCOUNT_AGE_DAYS = 30;
 const DAY_MS = 86_400_000;
@@ -29,17 +30,21 @@ export interface GithubLogin {
  * Creates or refreshes the operator for a GitHub login, keyed by GitHub id.
  * Pending operators are promoted when trust now passes. Active and suspended operators
  * keep their status, and `role` is never touched: admins are set by hand.
+ *
+ * Invite-only access (N11) is decided here and nowhere else: with `inviteOnly` on, an operator is active only if the trust
+ * floor passes AND the GitHub account has been invited. The rule can only keep a new or pending operator pending. It never
+ * makes an active operator pending: letting someone in is not undone by turning the setting on later.
  */
 export async function recordGithubLogin(
   db: Database,
   input: GithubLogin,
   now: Date = new Date(),
+  options: { inviteOnly?: boolean } = {},
 ): Promise<Operator> {
-  const trust = evaluateTrust({
-    githubCreatedAt: input.githubCreatedAt,
-    emailVerified: input.emailVerified,
-    now,
-  });
+  const invited = options.inviteOnly ? await isInvited(db, input.githubId) : true;
+  const passes = (githubCreatedAt: Date | null) =>
+    invited && evaluateTrust({ githubCreatedAt, emailVerified: input.emailVerified, now }) === "active";
+  const trust = passes(input.githubCreatedAt) ? "active" : "pending";
 
   let [current] = await db
     .select()
@@ -72,9 +77,7 @@ export async function recordGithubLogin(
   }
 
   const githubCreatedAt = input.githubCreatedAt ?? current.githubCreatedAt;
-  const promote =
-    current.status === "pending" &&
-    evaluateTrust({ githubCreatedAt, emailVerified: input.emailVerified, now }) === "active";
+  const promote = current.status === "pending" && passes(githubCreatedAt);
 
   const [updated] = await db
     .update(operators)
@@ -114,11 +117,19 @@ export async function linkOperatorToUser(db: Database, authUserId: string): Prom
   return linked ?? null;
 }
 
-/** Makes the operator with this GitHub id an admin. Run by hand through scripts/make-admin.ts; the app never promotes anyone. */
+/**
+ * Makes the operator with this GitHub id an admin. Run by hand through scripts/make-admin.ts; the app never promotes
+ * anyone. A pending operator becomes active at the same time: an administrator set by hand is a deliberate act, and under
+ * invite-only the first administrator could not otherwise get in. A suspended operator stays suspended.
+ */
 export async function promoteToAdmin(db: Database, githubId: string): Promise<Operator | null> {
   const [promoted] = await db
     .update(operators)
-    .set({ role: "admin" })
+    .set({
+      role: "admin",
+      status: sql`case when ${operators.status} = 'pending' then 'active'::operator_status else ${operators.status} end`,
+      verifiedAt: sql`case when ${operators.status} = 'pending' then now() else ${operators.verifiedAt} end`,
+    })
     .where(eq(operators.githubId, githubId))
     .returning();
   return promoted ?? null;
